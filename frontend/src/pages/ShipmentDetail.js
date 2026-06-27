@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import api from "../lib/api";
+import { toast } from "sonner";
+import api, { formatApiError } from "../lib/api";
 import { useI18n } from "../i18n";
 import { Timeline, StatusBadge } from "../components/Timeline";
 import { EstimateView } from "./NewShipment";
@@ -23,7 +24,7 @@ export default function ShipmentDetail() {
       const a = document.createElement("a");
       a.href = url; a.download = `eticket-${s.tracking_number}.pdf`; a.click();
       URL.revokeObjectURL(url);
-    } catch (e) {}
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
   };
 
   const Row = ({ label, value }) => (
