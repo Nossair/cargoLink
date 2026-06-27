@@ -22,8 +22,10 @@ export default function ShipmentDetail() {
       const res = await api.get(`/shipments/${id}/ticket`, { responseType: "blob" });
       const url = URL.createObjectURL(res.data);
       const a = document.createElement("a");
-      a.href = url; a.download = `eticket-${s.tracking_number}.pdf`; a.click();
-      URL.revokeObjectURL(url);
+      a.href = url; a.download = `eticket-${s.tracking_number}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast.success(t("ticket_downloaded"));
     } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
   };
 
