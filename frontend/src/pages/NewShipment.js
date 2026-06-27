@@ -1,15 +1,19 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
 import { useI18n } from "../i18n";
-import { Buildings, House, Calculator } from "@phosphor-icons/react";
+import { useAuth, isStaff } from "../context/AuthContext";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { Buildings, House, Calculator, User, UserPlus, Copy, CheckCircle } from "@phosphor-icons/react";
 
 const COUNTRIES = ["Maroc", "France", "Espagne", "Belgique", "Italie", "Allemagne", "Pays-Bas"];
 const CATEGORIES = ["habillement", "electronique", "alimentaire", "autre"];
 
 export default function NewShipment() {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const staff = isStaff(user);
   const navigate = useNavigate();
   const [r, setR] = useState({ first_name: "", last_name: "", address: "", country: "Maroc", phone: "" });
   const [p, setP] = useState({ type: "", weight: "", length: "", width: "", height: "", declared_value: "", category: "autre" });
@@ -19,6 +23,16 @@ export default function NewShipment() {
   const [notes, setNotes] = useState("");
   const [estimate, setEstimate] = useState(null);
   const [loading, setLoading] = useState(false);
+  // staff client selection
+  const [clients, setClients] = useState([]);
+  const [clientMode, setClientMode] = useState("existing");
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [newClient, setNewClient] = useState({ first_name: "", last_name: "", email: "", phone: "", address: "" });
+  const [createAccount, setCreateAccount] = useState(false);
+  const [createdCreds, setCreatedCreds] = useState(null);
+  const [pendingId, setPendingId] = useState(null);
+
+  useEffect(() => { if (staff) api.get("/clients").then((res) => setClients(res.data)).catch(() => {}); }, [staff]);
 
   const doEstimate = async () => {
     if (!p.weight) { toast.error(t("weight")); return; }
@@ -31,9 +45,10 @@ export default function NewShipment() {
 
   const submit = async (e) => {
     e.preventDefault();
+    if (staff && clientMode === "existing" && !selectedClientId) { toast.error(t("select_client")); return; }
     setLoading(true);
     try {
-      const { data } = await api.post("/shipments", {
+      const payload = {
         recipient: r,
         parcel: {
           type: p.type, weight: parseFloat(p.weight), length: parseFloat(p.length || 0),
@@ -41,9 +56,15 @@ export default function NewShipment() {
           declared_value: parseFloat(p.declared_value || 0), category: p.category,
         },
         origin_country: origin, pickup_mode: pickup, pickup_slot: slot || null, notes,
-      });
+      };
+      if (staff) {
+        if (clientMode === "existing") payload.client_id = selectedClientId;
+        else { payload.new_client = newClient; payload.create_account = createAccount; }
+      }
+      const { data } = await api.post("/shipments", payload);
       toast.success(`${t("tracking_number")}: ${data.tracking_number}`);
-      navigate(`/shipment/${data.id}`);
+      if (data.client_credentials) { setCreatedCreds(data.client_credentials); setPendingId(data.id); }
+      else navigate(`/shipment/${data.id}`);
     } catch (err) {
       toast.error(formatApiError(err.response?.data?.detail));
     } finally { setLoading(false); }
@@ -57,8 +78,49 @@ export default function NewShipment() {
 
   return (
     <div data-testid="new-shipment-page" className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
-      <h1 className="font-display text-3xl sm:text-4xl font-extrabold tracking-tighter">{t("create_shipment")}</h1>
+      <h1 className="font-display text-3xl sm:text-4xl font-extrabold tracking-tighter">{staff ? t("new_shipment_staff") : t("create_shipment")}</h1>
       <form onSubmit={submit} className="mt-8 space-y-8">
+        {/* Staff: client selection */}
+        {staff && (
+          <section className="border border-black/10 rounded-sm p-6">
+            <h2 className="font-display text-lg font-bold tracking-tight mb-4">{t("client_selection")}</h2>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <button type="button" data-testid="client-mode-existing" onClick={() => setClientMode("existing")}
+                className={`flex items-center gap-2 p-3 rounded-sm border transition-colors ${clientMode === "existing" ? "border-[#002FA7] bg-[#002FA7]/5" : "border-black/15 hover:bg-secondary"}`}>
+                <User size={20} className={clientMode === "existing" ? "brand-text" : ""} /> <span className="font-medium text-sm">{t("existing_client")}</span>
+              </button>
+              <button type="button" data-testid="client-mode-new" onClick={() => setClientMode("new")}
+                className={`flex items-center gap-2 p-3 rounded-sm border transition-colors ${clientMode === "new" ? "border-[#002FA7] bg-[#002FA7]/5" : "border-black/15 hover:bg-secondary"}`}>
+                <UserPlus size={20} className={clientMode === "new" ? "brand-text" : ""} /> <span className="font-medium text-sm">{t("new_client_label")}</span>
+              </button>
+            </div>
+            {clientMode === "existing" ? (
+              clients.length === 0 ? <p className="text-sm text-muted-foreground">{t("no_clients")}</p> : (
+                <div>
+                  <Label>{t("select_client")}</Label>
+                  <select data-testid="select-client" value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)}
+                    className="mt-1 w-full border border-black/15 rounded-sm px-3 py-2.5 text-sm bg-white focus:outline-none focus:border-[#002FA7]">
+                    <option value="">— {t("select_client")} —</option>
+                    {clients.map((c) => <option key={c.id} value={c.id}>{c.first_name} {c.last_name} · {c.email}</option>)}
+                  </select>
+                </div>
+              )
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div><Label>{t("first_name")}</Label>{inp(newClient.first_name, (v) => setNewClient({ ...newClient, first_name: v }), { required: true, "data-testid": "nc-first-name" })}</div>
+                <div><Label>{t("last_name")}</Label>{inp(newClient.last_name, (v) => setNewClient({ ...newClient, last_name: v }), { required: true, "data-testid": "nc-last-name" })}</div>
+                <div><Label>{t("email")}</Label>{inp(newClient.email, (v) => setNewClient({ ...newClient, email: v }), { type: "email", required: true, "data-testid": "nc-email" })}</div>
+                <div><Label>{t("phone")}</Label>{inp(newClient.phone, (v) => setNewClient({ ...newClient, phone: v }), { required: true, "data-testid": "nc-phone" })}</div>
+                <div className="sm:col-span-2"><Label>{t("address")}</Label>{inp(newClient.address, (v) => setNewClient({ ...newClient, address: v }), { required: true, "data-testid": "nc-address" })}</div>
+                <label className="sm:col-span-2 flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" data-testid="create-account-checkbox" checked={createAccount} onChange={(e) => setCreateAccount(e.target.checked)} className="w-4 h-4 accent-[#002FA7]" />
+                  <span className="text-sm">{t("create_account_q")}</span>
+                </label>
+              </div>
+            )}
+          </section>
+        )}
+
         {/* Recipient */}
         <section className="border border-black/10 rounded-sm p-6">
           <h2 className="font-display text-lg font-bold tracking-tight mb-4">{t("recipient")}</h2>
@@ -142,6 +204,24 @@ export default function NewShipment() {
           {loading ? t("loading") : t("validate_request")}
         </button>
       </form>
+
+      <Dialog open={!!createdCreds} onOpenChange={(o) => { if (!o) { setCreatedCreds(null); navigate(`/shipment/${pendingId}`); } }}>
+        <DialogContent data-testid="client-credentials-dialog" className="max-w-sm">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><CheckCircle size={20} className="text-[#008A00]" weight="fill" /> {t("client_account_created")}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label>{t("email")}</Label><div className="font-mono text-sm bg-secondary rounded-sm px-3 py-2 mt-1" data-testid="created-client-email">{createdCreds?.email}</div></div>
+            <div>
+              <Label>{t("generated_password")}</Label>
+              <div className="flex items-center gap-2 mt-1">
+                <div className="flex-1 font-mono text-sm bg-secondary rounded-sm px-3 py-2" data-testid="created-client-password">{createdCreds?.password}</div>
+                <button data-testid="copy-client-password" onClick={() => { navigator.clipboard?.writeText(createdCreds.password); toast.success(t("copied")); }}
+                  className="border border-black/15 rounded-sm p-2 hover:bg-secondary"><Copy size={16} /></button>
+              </div>
+            </div>
+            <p className="text-xs text-[#FF2400]">{t("agency_created_note")}</p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

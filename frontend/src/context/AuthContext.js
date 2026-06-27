@@ -37,4 +37,5 @@ export const AuthProvider = ({ children }) => {
 };
 
 export const useAuth = () => useContext(AuthContext);
-export const isStaff = (u) => u && ["agent", "chef_agence", "admin"].includes(u.role);
+export const isStaff = (u) => u && ["agent", "chef_agence", "admin", "agence"].includes(u.role);
+export const isAdmin = (u) => u && u.role === "admin";

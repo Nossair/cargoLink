@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { useAuth, isStaff } from "../context/AuthContext";
+import { useAuth, isStaff, isAdmin } from "../context/AuthContext";
 import { useI18n } from "../i18n";
 import { Package, SignOut, Globe, List, X } from "@phosphor-icons/react";
 
@@ -25,8 +25,10 @@ export default function Navbar() {
     : isStaff(user)
     ? [
         { to: "/back-office", label: t("nav_dashboard"), testid: "nav-bo-dashboard" },
+        { to: "/back-office/new-shipment", label: t("new_shipment_staff"), testid: "nav-bo-new-shipment" },
         { to: "/back-office/shipments", label: t("nav_shipments"), testid: "nav-bo-shipments" },
         { to: "/back-office/clients", label: t("nav_clients"), testid: "nav-bo-clients" },
+        ...(isAdmin(user) ? [{ to: "/back-office/agencies", label: t("nav_agencies"), testid: "nav-bo-agencies" }] : []),
         { to: "/scanner", label: t("nav_scanner"), testid: "nav-bo-scanner" },
       ]
     : [];

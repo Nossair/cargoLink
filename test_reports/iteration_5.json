@@ -1,0 +1,47 @@
+{
+  "summary": "End-to-end testing of new CargoLink features: super-admin agency management, staff-driven shipment creation (existing client / new client with or without generated account) and PUT /api/shipments/{id} edit with role-based permissions. Backend: 46/46 pytest assertions pass. Frontend: full Playwright flow PASSED (admin creates agency -> dialog shows generated password -> new agency logs in -> creates shipment for existing client (sender = client) -> staff edits in en_transit -> creates new client with account -> credentials dialog -> new client can log in to /app). 1 backend robustness bug identified: POST /api/auth/login returns 500 instead of 401 when the target user has no password_hash (clients created by an agency without 'create_account').",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/login", "issue": "Returns 500 (KeyError on user['password_hash']) instead of 401 when trying to log in as a client that was created without an account (no password_hash field). Should reject with 401 'Email ou mot de passe incorrect'. Fix: in server.py login(), guard with `if not user or 'password_hash' not in user or not verify_password(...)` -> 401."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "NewShipment (select-client)", "issues": ["React hydration warning in console: '<span> cannot be a child of <option>' — the dynamic source-map instrumentation wraps option's text in a <span> via {display:contents}. Not functional (selection works) but produces noisy warnings. May come from the dev/transform pipeline. Recommendation: render `<option>` children as a plain template string, e.g. `{`${c.first_name} ${c.last_name} · ${c.email}`}`, to discourage the wrapper."]},
+      {"screen": "DialogContent (agency-credentials-dialog, client-credentials-dialog, qr-dialog)", "issues": ["Persistent Radix a11y warning: 'Missing Description or aria-describedby for DialogContent'. Pure a11y, non-blocking. Already noted in iteration_3/4."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_cargolink_api.py",
+    "/app/backend/tests/test_agencies_and_edit.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Fix POST /api/auth/login to return 401 instead of 500 when user document has no password_hash (clients without account). Suggested: `if not user or not user.get('password_hash') or not verify_password(data.password, user['password_hash']): raise HTTPException(401, ...)`.",
+    "(Optional a11y) Add <DialogDescription> to the 3 DialogContent instances (Agencies.js, NewShipment.js, ShipmentsList.js qr-dialog).",
+    "(Optional cosmetic) Refactor <option> in NewShipment.js select-client to avoid the React hydration <span>-inside-<option> warning."
+  ],
+  "critical_code_review_comments": [
+    "server.py login() trusts presence of password_hash unconditionally — fragile for clients created via /api/shipments without account (real branch in create_shipment). 1-line fix needed.",
+    "create_shipment correctly returns client_credentials only when create_account=True (verified via test). Generated password length=10 alphanumeric, ok.",
+    "PUT /api/shipments/{id} correctly enforces: staff always allowed (even en_transit), client only when status in (demande_creee, en_attente_collecte), other clients -> 403 (all verified).",
+    "POST /api/agencies returns the generated_password in the response body for one-time display (acceptable). require_admin properly enforced (agence and agent both get 403, verified).",
+    "Seeded agence.casa@cargolink.ma/agence123 confirmed working. Login email is normalised to lower() server-side; tests now use .lower() consistently.",
+    "Navbar nav-bo-agencies link is admin-only (isAdmin) — verified hidden for the agence role.",
+    "server.py at 736 lines remains within acceptable size; consider splitting routers (auth, shipments, agencies, clients) for maintainability if growth continues."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_cargolink_api.py (test_register: assert me.email == payload.email.lower())",
+    "/app/backend/tests/test_agencies_and_edit.py (NEW — 15 tests for agencies + staff shipment creation + edit permissions)"
+  ],
+  "success_rate": {"backend": "100% (46/46 after test adjustments; 1 backend robustness bug logged separately as 500-vs-401)", "frontend": "100% (admin/agency creation + login + existing-client shipment + staff edit in_transit + new-client-with-account + new client login all PASS)"},
+  "test_credentials": "Admin admin@cargolink.ma/admin123 ; Agence seedée agence.casa@cargolink.ma/agence123 ; Agent agent@cargolink.ma/agent123. New agencies & clients created at runtime with TEST_/test_ prefix and dynamic timestamps.",
+  "seed_data_creation": "Runtime via UI/API: 1 agency test_ag_<ts>@cargolink.ma, 2 clients test_ec_<ts>@test.com and test_nc_<ts>@test.com, plus 2 shipments. Also many TEST_*@test.com users from backend pytest fixtures.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All new agency/staff-shipment/edit features work end-to-end on UI and API. The only remaining backend issue is POST /api/auth/login returning 500 for users without password_hash — see action items. Test file /app/backend/tests/test_agencies_and_edit.py covers all permission matrices and can be reused as regression. Frontend Playwright flow is in this iteration's testing log; selectors used: agencies-page, create-agency-form, agency-{name,email,phone,address,submit}, agency-credentials-dialog, created-agency-{email,password}, agency-row-<email>, nav-bo-agencies, nav-bo-new-shipment, new-shipment-page, client-mode-{existing,new}, select-client, nc-{first-name,last-name,email,phone,address}, create-account-checkbox, rcpt-{first-name,last-name,address,phone}, parcel-{type,weight}, pickup-agency, submit-shipment-button, client-credentials-dialog, created-client-{email,password}, shipment-detail, edit-shipment-btn, edit-shipment-page, save-shipment-button.",
+  "rca of the issue": "Backend bug (login 500): server.py login() at line ~388 calls verify_password(data.password, user['password_hash']). For users inserted by create_shipment without create_account, the 'password_hash' key does NOT exist in the doc, raising KeyError. KeyError bubbles up as an unhandled exception and FastAPI returns 500. Mitigation (one-liner): change to `if not user or not user.get('password_hash') or not verify_password(data.password, user['password_hash']): raise HTTPException(401, 'Email ou mot de passe incorrect')`."
+}

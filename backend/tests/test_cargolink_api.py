@@ -104,7 +104,7 @@ class TestAuth:
         # /me works
         me = s.get(f"{API}/auth/me", timeout=10)
         assert me.status_code == 200
-        assert me.json()["email"] == payload["email"]
+        assert me.json()["email"] == payload["email"].lower()
 
     def test_register_duplicate_email(self, client_user):
         s = requests.Session()

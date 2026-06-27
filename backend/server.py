@@ -87,6 +87,14 @@ class Parcel(BaseModel):
     category: str = "autre"
 
 
+class NewClientInput(BaseModel):
+    first_name: str
+    last_name: str
+    email: EmailStr
+    phone: str
+    address: str
+
+
 class ShipmentInput(BaseModel):
     recipient: Recipient
     parcel: Parcel
@@ -94,6 +102,26 @@ class ShipmentInput(BaseModel):
     pickup_mode: str  # "agency" or "home"
     pickup_slot: Optional[str] = None
     notes: Optional[str] = None
+    # staff-only: create for an existing or new client
+    client_id: Optional[str] = None
+    new_client: Optional[NewClientInput] = None
+    create_account: bool = False
+
+
+class ShipmentEditInput(BaseModel):
+    recipient: Recipient
+    parcel: Parcel
+    origin_country: str
+    pickup_mode: str
+    pickup_slot: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class AgencyCreateInput(BaseModel):
+    agency_name: str
+    email: EmailStr
+    phone: str
+    address: str
 
 
 class StatusUpdateInput(BaseModel):
@@ -170,9 +198,22 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Token invalide")
 
 
+STAFF_ROLES = ("agent", "chef_agence", "admin", "agence")
+
+
 def require_staff(user: dict):
-    if user.get("role") not in ("agent", "chef_agence", "admin"):
+    if user.get("role") not in STAFF_ROLES:
         raise HTTPException(status_code=403, detail="Accès réservé au personnel")
+
+
+def require_admin(user: dict):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé au super-admin")
+
+
+def gen_password(length: int = 10) -> str:
+    alphabet = string.ascii_letters + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
 # ---------------- Business helpers ----------------
@@ -388,17 +429,50 @@ def serialize_shipment(doc: dict) -> dict:
 
 @api_router.post("/shipments")
 async def create_shipment(data: ShipmentInput, user: dict = Depends(get_current_user)):
+    staff = user.get("role") in STAFF_ROLES
+    owner = user
+    client_credentials = None
+
+    if staff and (data.client_id or data.new_client):
+        if data.client_id:
+            owner = await db.users.find_one({"_id": ObjectId(data.client_id)})
+            if not owner:
+                raise HTTPException(status_code=404, detail="Client introuvable")
+        else:
+            nc = data.new_client
+            email = nc.email.lower()
+            existing = await db.users.find_one({"email": email})
+            if existing:
+                owner = existing
+            else:
+                cdoc = {
+                    "email": email, "first_name": nc.first_name, "last_name": nc.last_name,
+                    "phone": nc.phone, "address": nc.address, "role": "client",
+                    "has_account": bool(data.create_account),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+                if data.create_account:
+                    pw = gen_password()
+                    cdoc["password_hash"] = hash_password(pw)
+                    client_credentials = {"email": email, "password": pw}
+                cres = await db.users.insert_one(cdoc)
+                cdoc["_id"] = cres.inserted_id
+                owner = cdoc
+
     tracking = gen_tracking()
     est = compute_estimate(data.parcel.weight, data.origin_country,
                            data.recipient.country, data.parcel.category, data.parcel.declared_value)
     now = datetime.now(timezone.utc).isoformat()
+    created_by_label = "Client" if not staff else (user.get("agency_name") or f"{user['first_name']} {user['last_name']}")
     doc = {
         "tracking_number": tracking,
         "qr_code": make_qr_data_url(tracking),
-        "client_id": str(user["_id"]),
+        "client_id": str(owner["_id"]),
+        "created_by": str(user["_id"]),
+        "created_by_label": created_by_label,
         "sender": {
-            "first_name": user["first_name"], "last_name": user["last_name"],
-            "phone": user["phone"], "address": user["address"], "email": user["email"],
+            "first_name": owner.get("first_name", ""), "last_name": owner.get("last_name", ""),
+            "phone": owner.get("phone", ""), "address": owner.get("address", ""), "email": owner.get("email", ""),
         },
         "recipient": data.recipient.model_dump(),
         "parcel": data.parcel.model_dump(),
@@ -413,12 +487,47 @@ async def create_shipment(data: ShipmentInput, user: dict = Depends(get_current_
     }
     res = await db.shipments.insert_one(doc)
     doc["_id"] = res.inserted_id
-    return serialize_shipment(doc)
+    out = serialize_shipment(doc)
+    if client_credentials:
+        out["client_credentials"] = client_credentials
+    return out
+
+
+EDITABLE_BY_CLIENT_STATUSES = ("demande_creee", "en_attente_collecte")
+
+
+@api_router.put("/shipments/{shipment_id}")
+async def edit_shipment(shipment_id: str, data: ShipmentEditInput, user: dict = Depends(get_current_user)):
+    doc = await db.shipments.find_one({"_id": ObjectId(shipment_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Colis introuvable")
+    staff = user.get("role") in STAFF_ROLES
+    if not staff:
+        if doc["client_id"] != str(user["_id"]):
+            raise HTTPException(status_code=403, detail="Accès refusé")
+        if doc["status"] not in EDITABLE_BY_CLIENT_STATUSES:
+            raise HTTPException(status_code=403, detail="Modification impossible : le colis est déjà pris en charge")
+    est = compute_estimate(data.parcel.weight, data.origin_country,
+                           data.recipient.country, data.parcel.category, data.parcel.declared_value)
+    now = datetime.now(timezone.utc).isoformat()
+    entry = {"status": doc["status"], "note": "Envoi modifié", "at": now,
+             "by": user.get("agency_name") or f"{user['first_name']} {user['last_name']}"}
+    await db.shipments.update_one({"_id": ObjectId(shipment_id)}, {"$set": {
+        "recipient": data.recipient.model_dump(),
+        "parcel": data.parcel.model_dump(),
+        "origin_country": data.origin_country,
+        "pickup_mode": data.pickup_mode,
+        "pickup_slot": data.pickup_slot,
+        "notes": data.notes,
+        "estimate": est,
+    }, "$push": {"history": entry}})
+    updated = await db.shipments.find_one({"_id": ObjectId(shipment_id)})
+    return serialize_shipment(updated)
 
 
 @api_router.get("/shipments")
 async def list_shipments(user: dict = Depends(get_current_user)):
-    if user.get("role") in ("agent", "chef_agence", "admin"):
+    if user.get("role") in STAFF_ROLES:
         cursor = db.shipments.find().sort("created_at", -1)
     else:
         cursor = db.shipments.find({"client_id": str(user["_id"])}).sort("created_at", -1)
@@ -541,6 +650,39 @@ async def dashboard_stats(user: dict = Depends(get_current_user)):
             "clients": clients, "by_status": by_status, "alerts": alerts}
 
 
+# ---------------- Agencies (super-admin only) ----------------
+@api_router.get("/agencies")
+async def list_agencies(user: dict = Depends(get_current_user)):
+    require_admin(user)
+    docs = await db.users.find({"role": "agence"}).sort("created_at", -1).to_list(1000)
+    result = []
+    for d in docs:
+        s = serialize_user(d)
+        s["created_count"] = await db.shipments.count_documents({"created_by": s["id"]})
+        result.append(s)
+    return result
+
+
+@api_router.post("/agencies")
+async def create_agency(data: AgencyCreateInput, user: dict = Depends(get_current_user)):
+    require_admin(user)
+    email = data.email.lower()
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
+    pw = gen_password()
+    doc = {
+        "email": email, "password_hash": hash_password(pw),
+        "agency_name": data.agency_name, "first_name": data.agency_name, "last_name": "",
+        "phone": data.phone, "address": data.address, "role": "agence",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    res = await db.users.insert_one(doc)
+    doc["_id"] = res.inserted_id
+    out = serialize_user(doc)
+    out["generated_password"] = pw
+    return out
+
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -578,6 +720,14 @@ async def startup():
             "first_name": "Youssef", "last_name": "Bennani", "phone": "+212611111111",
             "address": "Agence Casablanca", "role": "agent",
             "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    agence_email = "agence.casa@cargolink.ma"
+    if not await db.users.find_one({"email": agence_email}):
+        await db.users.insert_one({
+            "email": agence_email, "password_hash": hash_password("agence123"),
+            "agency_name": "Agence Casablanca Centre", "first_name": "Agence Casablanca Centre",
+            "last_name": "", "phone": "+212622222222", "address": "Bd Mohammed V, Casablanca",
+            "role": "agence", "created_at": datetime.now(timezone.utc).isoformat(),
         })
 
 

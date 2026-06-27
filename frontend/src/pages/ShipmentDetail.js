@@ -1,21 +1,25 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
 import { useI18n } from "../i18n";
+import { useAuth, isStaff } from "../context/AuthContext";
 import { Timeline, StatusBadge } from "../components/Timeline";
 import { EstimateView } from "./NewShipment";
-import { DownloadSimple } from "@phosphor-icons/react";
+import { DownloadSimple, PencilSimple } from "@phosphor-icons/react";
 
 export default function ShipmentDetail() {
   const { id } = useParams();
   const { t } = useI18n();
+  const { user } = useAuth();
   const [s, setS] = useState(null);
 
   useEffect(() => { api.get(`/shipments/${id}`).then((r) => setS(r.data)).catch(() => setS(false)); }, [id]);
 
   if (s === null) return <div className="max-w-5xl mx-auto px-4 py-12 font-mono text-sm text-muted-foreground">{t("loading")}</div>;
   if (!s) return <div className="max-w-5xl mx-auto px-4 py-12 text-[#FF2400]">404</div>;
+
+  const canEdit = isStaff(user) || ["demande_creee", "en_attente_collecte"].includes(s.status);
 
   const download = async () => {
     try {
@@ -43,7 +47,15 @@ export default function ShipmentDetail() {
           <div className="text-xs uppercase tracking-wider text-muted-foreground">{t("tracking_number")}</div>
           <h1 className="font-mono font-bold text-2xl">{s.tracking_number}</h1>
         </div>
-        <StatusBadge status={s.status} />
+        <div className="flex items-center gap-3">
+          {canEdit && (
+            <Link to={`/shipment/${s.id}/edit`} data-testid="edit-shipment-btn"
+              className="inline-flex items-center gap-2 border border-black/15 px-4 py-2 rounded-sm text-sm font-medium hover:bg-secondary transition-colors">
+              <PencilSimple size={16} /> {t("edit")}
+            </Link>
+          )}
+          <StatusBadge status={s.status} />
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6 mt-8">
