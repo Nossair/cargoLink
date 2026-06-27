@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
 import { useI18n, STATUS_FLOW } from "../i18n";
 import { StatusBadge } from "../components/Timeline";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { QrCode, DownloadSimple } from "@phosphor-icons/react";
+import { QrCode, DownloadSimple, PencilSimple } from "@phosphor-icons/react";
 
 export default function ShipmentsList() {
   const { t } = useI18n();
@@ -68,6 +69,7 @@ export default function ShipmentsList() {
               <th className="text-start p-3 font-medium">{t("phone")}</th>
               <th className="text-start p-3 font-medium">{t("status")}</th>
               <th className="text-start p-3 font-medium">{t("update_status")}</th>
+              <th className="text-start p-3 font-medium">{t("actions")}</th>
               <th className="text-start p-3 font-medium">QR</th>
             </tr>
           </thead>
@@ -84,6 +86,12 @@ export default function ShipmentsList() {
                     className="border border-black/15 rounded-sm px-2 py-1.5 text-xs bg-white focus:outline-none focus:border-[#002FA7]">
                     {STATUS_FLOW.map((st) => <option key={st} value={st}>{t(`st_${st}`)}</option>)}
                   </select>
+                </td>
+                <td className="p-3">
+                  <div className="flex items-center gap-3">
+                    <Link to={`/shipment/${s.id}`} data-testid={`bo-view-${s.tracking_number}`} className="brand-text font-medium">{t("view")}</Link>
+                    <Link to={`/shipment/${s.id}/edit`} data-testid={`bo-edit-${s.tracking_number}`} className="inline-flex items-center gap-1 text-foreground font-medium hover:brand-text transition-colors"><PencilSimple size={15} /> {t("edit")}</Link>
+                  </div>
                 </td>
                 <td className="p-3">
                   <button data-testid={`qr-btn-${s.tracking_number}`} onClick={() => setQrShipment(s)} className="brand-text"><QrCode size={20} /></button>

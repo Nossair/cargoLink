@@ -1,0 +1,34 @@
+{
+  "summary": "Targeted re-test of the bug fix: 'Staff cannot reach shipment edit from Back Office list'. Verified that /back-office/shipments now exposes a new Actions column with bo-view-<tracking> and bo-edit-<tracking> links for every row. Tested as AGENCE (agence.casa@cargolink.ma/agence123) and SUPER-ADMIN (admin@cargolink.ma/admin123). Both can open EditShipment from the list AND save modifications even when the shipment is in en_transit. Non-regression: status update via status-select-<tracking>, QR dialog with dialog-download-ticket, and Téléphone column all still work.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "QR dialog (and other DialogContent)", "issues": ["Persistent Radix a11y warning: 'Missing Description or aria-describedby={undefined} for DialogContent' — already noted in iteration_3/4/5, non-blocking."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_agencies_and_edit.py",
+    "/app/test_reports/pytest/agencies_edit_results.xml"
+  ],
+  "action_items": [
+    "(Optional a11y, already pending) Add <DialogDescription> to QR dialog and other DialogContent components.",
+    "(Carried over from iteration_5, unrelated to this fix) Fix POST /api/auth/login to return 401 instead of 500 when user document has no password_hash."
+  ],
+  "critical_code_review_comments": [
+    "ShipmentsList.js: new Actions column correctly uses react-router-dom Link with data-testid bo-view-<tracking> -> /shipment/:id and bo-edit-<tracking> -> /shipment/:id/edit. Hrefs are correctly built from s.id (Mongo ObjectId surfaced as id in API response).",
+    "PencilSimple icon imported and rendered; styling consistent with brand-text.",
+    "Edit flow verified end-to-end: list -> EditShipment (pre-filled) -> PUT /api/shipments/{id} -> redirected to ShipmentDetail with updated recipient & weight + history entry 'Envoi modifié'. Works in en_transit for both agence and admin, confirming staff bypass of client-only status guard.",
+    "View flow: bo-view-<tracking> opens ShipmentDetail where edit-shipment-btn is visible for staff (verified for admin).",
+    "Non-regression confirmed: status-select-<tracking> still triggers PUT /api/shipments/{id}/status (toast 'Mettre à jour le statut'), qr-btn-<tracking> opens qr-dialog with dialog-download-ticket, and the TÉLÉPHONE column (sender phone) is still present (headers: ['N° DE SUIVI','EXPÉDITEUR','DESTINATION','TÉLÉPHONE','STATUT','METTRE À JOUR LE STATUT','ACTIONS','QR'])."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only retest)", "frontend": "100% (AGENCE edit-in-transit pass, ADMIN edit-in-transit pass, view link pass, QR & status non-regression pass)"},
+  "test_credentials": "admin@cargolink.ma/admin123 ; agence.casa@cargolink.ma/agence123 ; agent@cargolink.ma/agent123",
+  "seed_data_creation": "No new seed. Used existing seeded shipments (29 visible to both agence and admin). Two existing shipments mutated for the test: CL2640706678 -> recipient last_name MODIF_AGENCE then MODIF_ADMIN, weight 12.5 then 19.9.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Bug 'staff cannot reach shipment edit from list' is FIXED. Selectors used: login-email, login-password, login-submit, bo-shipments, bo-row-<tracking>, bo-view-<tracking>, bo-edit-<tracking>, status-select-<tracking>, qr-btn-<tracking>, qr-dialog, dialog-download-ticket, edit-shipment-page, parcel-weight, rcpt-last-name, save-shipment-button, shipment-detail, edit-shipment-btn. The only remaining unrelated backend issue is login 500-vs-401 for password-less clients (see iteration_5).",
+  "rca of the issue": "Original RCA: Back Office shipments list (/back-office/shipments) only exposed status select + QR button. There was no clickable navigation to /shipment/:id or /shipment/:id/edit, so staff visually had no way to reach EditShipment. Fix applied by E1: added an Actions column with two react-router Links exposing data-testid bo-view-<tracking> and bo-edit-<tracking>. Verified working in this iteration."
+}
