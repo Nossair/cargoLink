@@ -52,6 +52,7 @@ export default function ShipmentsList() {
               <th className="text-start p-3 font-medium">{t("tracking_number")}</th>
               <th className="text-start p-3 font-medium">{t("sender")}</th>
               <th className="text-start p-3 font-medium">{t("destination")}</th>
+              <th className="text-start p-3 font-medium">{t("phone")}</th>
               <th className="text-start p-3 font-medium">{t("status")}</th>
               <th className="text-start p-3 font-medium">{t("update_status")}</th>
               <th className="text-start p-3 font-medium">QR</th>
@@ -63,6 +64,7 @@ export default function ShipmentsList() {
                 <td className="p-3 font-mono font-medium">{s.tracking_number}</td>
                 <td className="p-3">{s.sender.first_name} {s.sender.last_name}</td>
                 <td className="p-3">{s.recipient.first_name} {s.recipient.last_name} · {s.recipient.country}</td>
+                <td className="p-3 font-mono text-xs">{s.recipient.phone}</td>
                 <td className="p-3"><StatusBadge status={s.status} /></td>
                 <td className="p-3">
                   <select data-testid={`status-select-${s.tracking_number}`} value={s.status} onChange={(e) => updateStatus(s.id, e.target.value)}
