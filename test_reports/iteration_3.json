@@ -1,0 +1,34 @@
+{
+  "summary": "Re-test ciblé e-ticket PDF (backend + frontend client & admin) + non-régression colonne Téléphone et recherche par téléphone expéditeur. 30/31 tests pytest passent; le 1 'fail' historique TestAuth.test_register_returns_user_and_sets_cookie était une assertion case-sensitive sur l'email retourné (le backend lowercase l'email à l'inscription) — corrigée dans le fichier de test. Tous les nouveaux tests TestETicket passent (5/5): client peut télécharger son propre e-ticket (PDF signature %PDF + Content-Disposition + filename eticket-<tracking>.pdf), admin et agent peuvent télécharger n'importe quel ticket, autre client => 403, non authentifié => 401. UI Playwright: client crée un envoi, télécharge l'e-ticket depuis /shipment/:id (4667 bytes, %PDF), admin ouvre qr-dialog et télécharge via dialog-download-ticket, colonne Téléphone visible et recherche par phone expéditeur (+33611112222) filtre correctement à 1 ligne.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "qr-dialog (back-office)", "issues": ["Warning console Radix: DialogContent sans Description/aria-describedby — purement a11y, non bloquant."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_cargolink_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optionnel a11y) Ajouter <DialogDescription> ou aria-describedby au DialogContent du qr-dialog pour supprimer le warning Radix."
+  ],
+  "critical_code_review_comments": [
+    "build_ticket_pdf utilise s['qr_code'].split(',',1)[1] sans garde — si un ancien document n'a pas de qr_code data-url, l'endpoint ticket lèvera une 500. Tous les shipments créés par /api/shipments en ont (make_qr_data_url) donc non observable en pratique, mais un fallback (re-générer le QR si absent ou pas en data-url) renforcerait la robustesse.",
+    "ShipmentDetail.download() avale silencieusement les erreurs (catch vide) — afficher un toast d'erreur comme le fait ShipmentsList.downloadTicket améliorerait l'UX.",
+    "Le filtre côté admin matche le téléphone via substring brute (s.sender.phone.includes(q)) — pratique mais un utilisateur peut tomber sur des correspondances partielles inattendues; acceptable pour un MVP.",
+    "CORSMiddleware: allow_origins=['*'] avec allow_credentials=True n'est pas strictement conforme; le navigateur ignore '*' avec credentials et n'autorise effectivement aucune origine sauf via allow_origin_regex='.*'. Fonctionne ici car ingress proxifie, mais à durcir en prod."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_cargolink_api.py (ajout TestETicket 5 cas + fix assertion email lowercase)"
+  ],
+  "success_rate": { "backend": "100% (31/31 après fix de test, dont 5/5 e-ticket)", "frontend": "100% (e-ticket client + admin + filtre téléphone)" },
+  "test_credentials": "Admin admin@cargolink.ma/admin123, Agent agent@cargolink.ma/agent123, Client créé dynamiquement client_<ts>@test.com / client123",
+  "seed_data_creation": "Création d'un client + d'un envoi CL2721964476 via UI Playwright (et plusieurs clients TEST_* via pytest).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Endpoint GET /api/shipments/{id}/ticket renvoie un application/pdf StreamingResponse avec Content-Disposition attachment; filename=eticket-<tracking>.pdf. RBAC: staff (agent/chef_agence/admin) accède à tous, client uniquement le sien (403 sinon), non authentifié => 401. UI: bouton download-qr sur /shipment/:id côté client; bouton dialog-download-ticket dans qr-dialog côté admin (déclenché par qr-btn-<tracking>). Pour tester un téléchargement en Playwright: page.expect_download() autour du clic puis vérifier dl.suggested_filename et le header %PDF du fichier. Colonne Téléphone (s.sender.phone) et filtre par téléphone expéditeur opérationnels.",
+  "rca of the issue": "Aucun bug fonctionnel. Le seul échec initial était dans un test existant (case-sensitive sur l'email) — corrigé sans modifier le code applicatif."
+}

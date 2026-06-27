@@ -95,7 +95,7 @@ class TestAuth:
         r = s.post(f"{API}/auth/register", json=payload, timeout=15)
         assert r.status_code == 200
         body = r.json()
-        assert body["email"] == payload["email"]
+        assert body["email"] == payload["email"].lower()
         assert "password_hash" not in body
         assert "_id" not in body
         assert "id" in body
@@ -220,6 +220,46 @@ class TestShipments:
         r = client_user["session"].put(f"{API}/shipments/{shipment['id']}/status",
                                        json={"status": "en_transit"}, timeout=10)
         assert r.status_code == 403
+
+
+# ---------------- e-Ticket PDF ----------------
+class TestETicket:
+    def test_client_can_download_own_ticket(self, client_user, shipment):
+        r = client_user["session"].get(f"{API}/shipments/{shipment['id']}/ticket", timeout=20)
+        assert r.status_code == 200, r.text
+        assert r.headers.get("content-type", "").startswith("application/pdf")
+        cd = r.headers.get("content-disposition", "")
+        assert "attachment" in cd.lower()
+        assert f"eticket-{shipment['tracking_number']}.pdf" in cd
+        assert r.content.startswith(b"%PDF"), "Response body is not a PDF"
+        assert len(r.content) > 1000  # non-trivial PDF
+
+    def test_admin_can_download_any_ticket(self, admin_session, shipment):
+        r = admin_session.get(f"{API}/shipments/{shipment['id']}/ticket", timeout=20)
+        assert r.status_code == 200
+        assert r.headers.get("content-type", "").startswith("application/pdf")
+        assert r.content.startswith(b"%PDF")
+
+    def test_agent_can_download_any_ticket(self, agent_session, shipment):
+        r = agent_session.get(f"{API}/shipments/{shipment['id']}/ticket", timeout=20)
+        assert r.status_code == 200
+        assert r.content.startswith(b"%PDF")
+
+    def test_other_client_cannot_download_ticket(self, shipment):
+        s = requests.Session()
+        payload = {
+            "first_name": "Other", "last_name": "User",
+            "email": f"TEST_other2_{rand_suffix()}@test.com",
+            "phone": "+33633", "address": "Lyon", "password": "pw12345",
+        }
+        reg = s.post(f"{API}/auth/register", json=payload, timeout=15)
+        assert reg.status_code == 200
+        r = s.get(f"{API}/shipments/{shipment['id']}/ticket", timeout=15)
+        assert r.status_code == 403
+
+    def test_ticket_requires_auth(self, shipment):
+        r = requests.get(f"{API}/shipments/{shipment['id']}/ticket", timeout=10)
+        assert r.status_code == 401
 
 
 # ---------------- Scanner ----------------

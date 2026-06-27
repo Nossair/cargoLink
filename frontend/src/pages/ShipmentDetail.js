@@ -16,9 +16,14 @@ export default function ShipmentDetail() {
   if (s === null) return <div className="max-w-5xl mx-auto px-4 py-12 font-mono text-sm text-muted-foreground">{t("loading")}</div>;
   if (!s) return <div className="max-w-5xl mx-auto px-4 py-12 text-[#FF2400]">404</div>;
 
-  const download = () => {
-    const a = document.createElement("a");
-    a.href = s.qr_code; a.download = `${s.tracking_number}.png`; a.click();
+  const download = async () => {
+    try {
+      const res = await api.get(`/shipments/${id}/ticket`, { responseType: "blob" });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url; a.download = `eticket-${s.tracking_number}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {}
   };
 
   const Row = ({ label, value }) => (
@@ -64,10 +69,10 @@ export default function ShipmentDetail() {
         </div>
 
         <div className="border border-black/10 rounded-sm p-6 h-fit">
-          <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-4">QR Code</h3>
+          <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-4">{t("eticket")}</h3>
           <img data-testid="qr-image" src={s.qr_code} alt="QR" className="w-full border border-black/10 rounded-sm" />
-          <button data-testid="download-qr" onClick={download} className="mt-4 w-full inline-flex items-center justify-center gap-2 border border-black/15 py-2.5 rounded-sm text-sm font-medium hover:bg-secondary transition-colors">
-            <DownloadSimple size={16} /> {t("download_qr")}
+          <button data-testid="download-qr" onClick={download} className="mt-4 w-full inline-flex items-center justify-center gap-2 brand-bg text-white py-2.5 rounded-sm text-sm font-medium hover:opacity-90 transition-opacity">
+            <DownloadSimple size={16} /> {t("download_ticket")}
           </button>
         </div>
       </div>

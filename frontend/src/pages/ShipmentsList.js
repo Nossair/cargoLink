@@ -4,7 +4,7 @@ import api, { formatApiError } from "../lib/api";
 import { useI18n, STATUS_FLOW } from "../i18n";
 import { StatusBadge } from "../components/Timeline";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { QrCode } from "@phosphor-icons/react";
+import { QrCode, DownloadSimple } from "@phosphor-icons/react";
 
 export default function ShipmentsList() {
   const { t } = useI18n();
@@ -24,11 +24,22 @@ export default function ShipmentsList() {
     } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
   };
 
+  const downloadTicket = async (s) => {
+    try {
+      const res = await api.get(`/shipments/${s.id}/ticket`, { responseType: "blob" });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url; a.download = `eticket-${s.tracking_number}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
+  };
+
   const filtered = shipments.filter((s) =>
     (filter === "all" || s.status === filter) &&
     (q === "" || s.tracking_number.includes(q) ||
       `${s.recipient.first_name} ${s.recipient.last_name}`.toLowerCase().includes(q.toLowerCase()) ||
-      `${s.sender.first_name} ${s.sender.last_name}`.toLowerCase().includes(q.toLowerCase()))
+      `${s.sender.first_name} ${s.sender.last_name}`.toLowerCase().includes(q.toLowerCase()) ||
+      (s.sender.phone || "").includes(q))
   );
 
   return (
@@ -64,7 +75,7 @@ export default function ShipmentsList() {
                 <td className="p-3 font-mono font-medium">{s.tracking_number}</td>
                 <td className="p-3">{s.sender.first_name} {s.sender.last_name}</td>
                 <td className="p-3">{s.recipient.first_name} {s.recipient.last_name} · {s.recipient.country}</td>
-                <td className="p-3 font-mono text-xs">{s.recipient.phone}</td>
+                <td className="p-3 font-mono text-xs">{s.sender.phone}</td>
                 <td className="p-3"><StatusBadge status={s.status} /></td>
                 <td className="p-3">
                   <select data-testid={`status-select-${s.tracking_number}`} value={s.status} onChange={(e) => updateStatus(s.id, e.target.value)}
@@ -84,7 +95,15 @@ export default function ShipmentsList() {
       <Dialog open={!!qrShipment} onOpenChange={(o) => !o && setQrShipment(null)}>
         <DialogContent data-testid="qr-dialog" className="max-w-xs">
           <DialogHeader><DialogTitle className="font-mono">{qrShipment?.tracking_number}</DialogTitle></DialogHeader>
-          {qrShipment && <img src={qrShipment.qr_code} alt="QR" className="w-full border border-black/10 rounded-sm" />}
+          {qrShipment && (
+            <>
+              <img src={qrShipment.qr_code} alt="QR" className="w-full border border-black/10 rounded-sm" />
+              <button data-testid="dialog-download-ticket" onClick={() => downloadTicket(qrShipment)}
+                className="mt-4 w-full inline-flex items-center justify-center gap-2 brand-bg text-white py-2.5 rounded-sm text-sm font-medium hover:opacity-90 transition-opacity">
+                <DownloadSimple size={16} /> {t("download_ticket")}
+              </button>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

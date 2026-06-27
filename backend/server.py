@@ -18,9 +18,15 @@ import bcrypt
 import qrcode
 from bson import ObjectId
 from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends
+from fastapi.responses import StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr, BeforeValidator, ConfigDict
+
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
+from reportlab.pdfgen import canvas as pdfcanvas
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -172,6 +178,114 @@ def require_staff(user: dict):
 # ---------------- Business helpers ----------------
 def gen_tracking() -> str:
     return "CL" + "".join(random.choices(string.digits, k=10))
+
+
+STATUS_LABELS = {
+    "demande_creee": "Demande creee",
+    "en_attente_collecte": "En attente de collecte",
+    "recu_agence": "Recu en agence",
+    "en_transit": "En transit",
+    "en_douane": "En douane",
+    "livre": "Livre",
+}
+CATEGORY_LABELS = {
+    "habillement": "Habillement", "electronique": "Electronique",
+    "alimentaire": "Alimentaire", "autre": "Autre",
+}
+
+
+def build_ticket_pdf(s: dict) -> io.BytesIO:
+    buf = io.BytesIO()
+    c = pdfcanvas.Canvas(buf, pagesize=A4)
+    W, H = A4
+    brand = (0, 0.184, 0.654)  # #002FA7
+    margin = 18 * mm
+
+    # Header band
+    c.setFillColorRGB(*brand)
+    c.rect(0, H - 32 * mm, W, 32 * mm, fill=1, stroke=0)
+    c.setFillColorRGB(1, 1, 1)
+    c.setFont("Helvetica-Bold", 22)
+    c.drawString(margin, H - 18 * mm, "CargoLink")
+    c.setFont("Helvetica", 10)
+    c.drawString(margin, H - 25 * mm, "e-Ticket d'envoi  -  Logistique Europe / Maroc")
+    c.setFont("Helvetica-Bold", 12)
+    c.drawRightString(W - margin, H - 18 * mm, "N: " + s["tracking_number"])
+    c.setFont("Helvetica", 9)
+    c.drawRightString(W - margin, H - 25 * mm, "Statut: " + STATUS_LABELS.get(s["status"], s["status"]))
+
+    # QR code
+    qr_b64 = s["qr_code"].split(",", 1)[1]
+    qr_img = ImageReader(io.BytesIO(base64.b64decode(qr_b64)))
+    qr_size = 45 * mm
+    c.drawImage(qr_img, W - margin - qr_size, H - 90 * mm, qr_size, qr_size)
+    c.setFont("Helvetica", 8)
+    c.setFillColorRGB(0.4, 0.4, 0.4)
+    c.drawCentredString(W - margin - qr_size / 2, H - 92 * mm, "Scanner ce code en agence")
+
+    y = H - 48 * mm
+
+    def section(title):
+        nonlocal y
+        c.setFillColorRGB(*brand)
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(margin, y, title)
+        c.setStrokeColorRGB(0.85, 0.85, 0.85)
+        c.line(margin, y - 2 * mm, W - margin - 50 * mm, y - 2 * mm)
+        y -= 8 * mm
+
+    def line(label, value):
+        nonlocal y
+        c.setFillColorRGB(0.3, 0.3, 0.3)
+        c.setFont("Helvetica", 9)
+        c.drawString(margin, y, label)
+        c.setFillColorRGB(0, 0, 0)
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(margin + 40 * mm, y, str(value))
+        y -= 6 * mm
+
+    snd, rcp, p = s["sender"], s["recipient"], s["parcel"]
+    section("Expediteur")
+    line("Nom", f"{snd['first_name']} {snd['last_name']}")
+    line("Telephone", snd.get("phone", "-"))
+    line("Adresse", snd.get("address", "-"))
+    y -= 3 * mm
+
+    section("Destinataire")
+    line("Nom", f"{rcp['first_name']} {rcp['last_name']}")
+    line("Telephone", rcp.get("phone", "-"))
+    line("Adresse", rcp.get("address", "-"))
+    line("Pays", rcp.get("country", "-"))
+    y -= 3 * mm
+
+    section("Colis")
+    line("Type", p.get("type", "-"))
+    line("Categorie", CATEGORY_LABELS.get(p.get("category"), p.get("category", "-")))
+    line("Poids", f"{p.get('weight', 0)} kg")
+    line("Dimensions", f"{p.get('length',0)} x {p.get('width',0)} x {p.get('height',0)} cm")
+    line("Valeur declaree", f"{p.get('declared_value', 0)} EUR")
+    line("Depart", s.get("origin_country", "-"))
+    line("Collecte", "Domicile" if s.get("pickup_mode") == "home" else "Depot en agence")
+    if s.get("pickup_slot"):
+        line("Creneau", s["pickup_slot"])
+    y -= 3 * mm
+
+    est = s.get("estimate") or {}
+    if est:
+        section("Estimation des couts")
+        line("Frais d'envoi", f"{est.get('shipping_eur')} EUR / {est.get('shipping_mad')} MAD")
+        line("Douane (est.)", f"{est.get('customs_low_eur')} - {est.get('customs_high_eur')} EUR")
+        line("Total estime", f"{est.get('total_low_eur')} - {est.get('total_high_eur')} EUR")
+
+    c.setFillColorRGB(0.45, 0.45, 0.45)
+    c.setFont("Helvetica-Oblique", 7.5)
+    c.drawString(margin, 18 * mm, "Estimation indicative - le montant reel des droits de douane sera calcule par nos services.")
+    c.drawString(margin, 13 * mm, "Document genere par CargoLink. Conservez ce e-ticket jusqu'a la livraison.")
+
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf
 
 
 def make_qr_data_url(content: str) -> str:
@@ -328,6 +442,19 @@ async def get_shipment(shipment_id: str, user: dict = Depends(get_current_user))
     if user.get("role") == "client" and doc["client_id"] != str(user["_id"]):
         raise HTTPException(status_code=403, detail="Accès refusé")
     return serialize_shipment(doc)
+
+
+@api_router.get("/shipments/{shipment_id}/ticket")
+async def shipment_ticket(shipment_id: str, user: dict = Depends(get_current_user)):
+    doc = await db.shipments.find_one({"_id": ObjectId(shipment_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Colis introuvable")
+    if user.get("role") == "client" and doc["client_id"] != str(user["_id"]):
+        raise HTTPException(status_code=403, detail="Accès refusé")
+    pdf = build_ticket_pdf(doc)
+    headers = {"Content-Disposition": f'attachment; filename="eticket-{doc["tracking_number"]}.pdf"'}
+    return StreamingResponse(pdf, media_type="application/pdf", headers=headers)
+
 
 
 @api_router.put("/shipments/{shipment_id}/status")
