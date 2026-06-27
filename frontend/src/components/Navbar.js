@@ -28,6 +28,7 @@ export default function Navbar() {
         { to: "/back-office/new-shipment", label: t("new_shipment_staff"), testid: "nav-bo-new-shipment" },
         { to: "/back-office/shipments", label: t("nav_shipments"), testid: "nav-bo-shipments" },
         { to: "/back-office/clients", label: t("nav_clients"), testid: "nav-bo-clients" },
+        { to: "/estimate", label: t("nav_estimate"), testid: "nav-bo-estimate" },
         ...(isAdmin(user) ? [{ to: "/back-office/agencies", label: t("nav_agencies"), testid: "nav-bo-agencies" }] : []),
         { to: "/scanner", label: t("nav_scanner"), testid: "nav-bo-scanner" },
       ]
