@@ -27,6 +27,7 @@ export default function NewShipment() {
   const [clients, setClients] = useState([]);
   const [clientMode, setClientMode] = useState("existing");
   const [selectedClientId, setSelectedClientId] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
   const [newClient, setNewClient] = useState({ first_name: "", last_name: "", email: "", phone: "", address: "" });
   const [createAccount, setCreateAccount] = useState(false);
   const [createdCreds, setCreatedCreds] = useState(null);
@@ -98,11 +99,31 @@ export default function NewShipment() {
               clients.length === 0 ? <p className="text-sm text-muted-foreground">{t("no_clients")}</p> : (
                 <div>
                   <Label>{t("select_client")}</Label>
-                  <select data-testid="select-client" value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)}
-                    className="mt-1 w-full border border-black/15 rounded-sm px-3 py-2.5 text-sm bg-white focus:outline-none focus:border-[#002FA7]">
-                    <option value="">— {t("select_client")} —</option>
-                    {clients.map((c) => <option key={c.id} value={c.id}>{c.first_name} {c.last_name} · {c.email}</option>)}
-                  </select>
+                  <input data-testid="client-search" value={clientSearch} onChange={(e) => setClientSearch(e.target.value)}
+                    placeholder={t("search")}
+                    className="mt-1 w-full border border-black/15 rounded-sm px-3 py-2.5 text-sm focus:outline-none focus:border-[#002FA7]" />
+                  {(() => {
+                    const q = clientSearch.trim().toLowerCase();
+                    const filtered = clients.filter((c) =>
+                      q === "" ||
+                      `${c.first_name} ${c.last_name}`.toLowerCase().includes(q) ||
+                      (c.phone || "").includes(clientSearch.trim()) ||
+                      (c.email || "").toLowerCase().includes(q));
+                    return (
+                      <div data-testid="client-results" className="mt-2 border border-black/10 rounded-sm max-h-56 overflow-y-auto">
+                        {filtered.length === 0 ? (
+                          <p className="text-sm text-muted-foreground p-3">{t("no_clients")}</p>
+                        ) : filtered.map((c) => (
+                          <button type="button" key={c.id} data-testid={`client-option-${c.email}`}
+                            onClick={() => setSelectedClientId(c.id)}
+                            className={`w-full text-start px-3 py-2.5 border-b border-black/10 last:border-0 transition-colors ${selectedClientId === c.id ? "bg-[#002FA7]/10" : "hover:bg-secondary"}`}>
+                            <div className="text-sm font-medium">{c.first_name} {c.last_name}</div>
+                            <div className="text-xs text-muted-foreground">{c.phone || "—"} · {c.email}</div>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
               )
             ) : (

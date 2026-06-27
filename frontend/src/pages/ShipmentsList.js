@@ -5,7 +5,7 @@ import api, { formatApiError } from "../lib/api";
 import { useI18n, STATUS_FLOW } from "../i18n";
 import { StatusBadge } from "../components/Timeline";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { QrCode, DownloadSimple, PencilSimple } from "@phosphor-icons/react";
+import { QrCode, DownloadSimple } from "@phosphor-icons/react";
 
 export default function ShipmentsList() {
   const { t } = useI18n();
@@ -88,10 +88,7 @@ export default function ShipmentsList() {
                   </select>
                 </td>
                 <td className="p-3">
-                  <div className="flex items-center gap-3">
-                    <Link to={`/shipment/${s.id}`} data-testid={`bo-view-${s.tracking_number}`} className="brand-text font-medium">{t("view")}</Link>
-                    <Link to={`/shipment/${s.id}/edit`} data-testid={`bo-edit-${s.tracking_number}`} className="inline-flex items-center gap-1 text-foreground font-medium hover:brand-text transition-colors"><PencilSimple size={15} /> {t("edit")}</Link>
-                  </div>
+                  <Link to={`/shipment/${s.id}`} data-testid={`bo-view-${s.tracking_number}`} className="brand-text font-medium">{t("view")}</Link>
                 </td>
                 <td className="p-3">
                   <button data-testid={`qr-btn-${s.tracking_number}`} onClick={() => setQrShipment(s)} className="brand-text"><QrCode size={20} /></button>
