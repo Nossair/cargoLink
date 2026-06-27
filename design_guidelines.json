@@ -1,0 +1,113 @@
+{
+  "theme_and_archetype": {
+    "theme": "LIGHT",
+    "archetype": "4 (Swiss & High-Contrast)",
+    "description": "Objective, rigid, functional, and authoritative. Designed for clarity and efficiency in logistics. Emphasizes stark contrast, minimalistic structural lines, and functional color usage over decoration."
+  },
+  "typography": {
+    "font_families": {
+      "heading": "Cabinet Grotesk",
+      "body": "IBM Plex Sans"
+    },
+    "scale": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter font-black",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-bold",
+      "h3": "text-xl sm:text-2xl font-semibold",
+      "h4": "text-lg sm:text-xl font-medium",
+      "body": "text-base leading-relaxed",
+      "small_label": "text-xs uppercase tracking-[0.2em] font-medium"
+    },
+    "rules": [
+      "Headings must use tight letter spacing.",
+      "Labels and overlines must be uppercase and widely tracked.",
+      "Never center text by default; use strict left-alignment for dense content and forms."
+    ]
+  },
+  "colors": {
+    "background": {
+      "primary": "#FFFFFF",
+      "secondary": "#F3F4F6",
+      "surface": "#FFFFFF",
+      "overlay": "bg-black/60 backdrop-blur-xl"
+    },
+    "text": {
+      "primary": "#0A0A0A",
+      "secondary": "#4B5563",
+      "muted": "#9CA3AF",
+      "inverse": "#FFFFFF"
+    },
+    "brand": {
+      "primary": "#002FA7",
+      "primary_hover": "#00227A",
+      "accent": "#FFD700",
+      "danger": "#FF2400",
+      "success": "#008A00"
+    },
+    "rules": [
+      "Color is Function Only. 95% of the UI should be monochrome.",
+      "Use International Klein Blue (#002FA7) strictly for primary CTAs and active states.",
+      "Use Warning Yellow (#FFD700) and Signal Red (#FF2400) for logistics alerts and status changes.",
+      "Hover states must be explicitly defined and accessible."
+    ]
+  },
+  "layout_and_spacing": {
+    "spacing_scale": "p-1, p-2, p-4, p-6, p-8, p-12, p-16",
+    "grid_systems": {
+      "front_office": "Bento Grid (Asymmetric, gap-6 to gap-8). Use col-span-full for hero/summary elements.",
+      "back_office": "Control Room Grid (grid-cols-1 md:grid-cols-3 lg:grid-cols-4, gap-4). Every pixel utilized, h-full on children."
+    },
+    "surfaces": "Grid Borders: Expose the skeleton. Container uses border-collapse style layout. Items use border-r border-b border-border/40. Max border-radius: 4px (rounded-sm) for a sharp, technical look.",
+    "rules": [
+      "Mobile-first responsive always.",
+      "Containers with borders must have internal padding (p-6 or p-8).",
+      "Optical alignment over geometrical."
+    ]
+  },
+  "components": {
+    "general": "Heavily customize Shadcn/UI. Strip 'Vercel-look'. Make elements flat with crisp 1px borders.",
+    "buttons": "Flat background, 1px subtle border, sharp corners (rounded-sm or rounded-none). Distinct hover states.",
+    "cards": "Avoid soft shadows. Use 'Grid Borders' or pure 1px solid borders (border-black/10).",
+    "forms": "Use Shadcn Input, Select. Labels left-aligned. Input fields flat with border-b only or sharp box.",
+    "timeline_tracker": "For desktop: Horizontal Linear Progress Step Pattern. For Mobile/Scanner: Minimalist Vertical Timeline. Active steps highlighted in Blue, exceptions in Red.",
+    "tables": "Dense rows, stark contrast headers, clear alternating row subtle backgrounds or solid grid lines.",
+    "icons": "Phosphor Icons (@phosphor-icons/react) for dense dashboards and logistics operations. Provide 'yarn add @phosphor-icons/react' command."
+  },
+  "motion_and_interactions": {
+    "hover_states": "Crisp color shift or subtle lift (-translate-y-[1px]) with shadow-sm.",
+    "transitions": "Use specific properties (e.g., transition: transform 0.2s ease, opacity 0.2s ease).",
+    "loading": "Use minimalist skeleton loaders or technical ASCII/monospaced loading text instead of generic spinners."
+  },
+  "media_and_images": {
+    "image_urls": [
+      {
+        "url": "https://images.pexels.com/photos/8555366/pexels-photo-8555366.jpeg",
+        "category": "Hero/Background",
+        "description": "Stacked cargo containers on a massive ship at the harbor. Use for login screen or front office hero section overlay (with bg-black/40)."
+      },
+      {
+        "url": "https://images.pexels.com/photos/6169132/pexels-photo-6169132.jpeg",
+        "category": "Driver Context",
+        "description": "Delivery worker inside van. Use for Mobile Scanner app onboarding or auth background."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1705988142466-e468bc654eeb",
+        "category": "Brand Logo Placeholder",
+        "description": "Abstract colorful 3D shape on light background. Use as placeholder for the agency logo in headers."
+      }
+    ],
+    "rules": [
+      "Max overlay opacity for images is bg-black/50.",
+      "Images must not exceed 80vh on mobile."
+    ]
+  },
+  "accessibility_and_testing": {
+    "contrast": "Minimum 4.5:1 for normal text, 3:1 for large. Check with APCA.",
+    "testing": "All interactive elements MUST include data-testid attribute (kebab-case, role-based). e.g., data-testid='submit-shipment-button'",
+    "multilingual": "Ensure UI supports RTL (Right-to-Left) layout shifts for Arabic (AR) mode gracefully. Text alignments and grid flows should reverse."
+  },
+  "specific_screens_instructions": {
+    "front_office": "Client portal. Focus on the 'Bento Grid'. Needs a prominent 'Create Shipment' CTA, a clean table of past shipments, and a highly visual 'Tracking Timeline'. Display estimated costs prominently in both EUR and MAD.",
+    "back_office": "Agent view. Data-heavy 'Control Room' grid. Requires complex tables with filters, validation toggles, and status alerts. Focus on density and readability. Monochrome base with status colors.",
+    "mobile_scanner": "Driver app. Full-screen optimized for mobile. Massive action buttons for 'Scan QR', 'Update Status'. Minimalist vertical timeline. High contrast for outdoor visibility."
+  }
+}
