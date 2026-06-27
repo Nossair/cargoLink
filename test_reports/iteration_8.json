@@ -1,0 +1,42 @@
+{
+  "summary": "Verified all iteration-8 changes: (1) ConfirmDialog (integrated) replaces window.confirm for client/agency/shipment delete & shipment cancel, (2) detail pages ClientDetailPage & AgencyDetailPage with back-btn, (3) row click opens detail, no text edit/delete buttons in list rows, (4) edit/delete are icon-only with aria-label. 70/70 backend tests pass (66 existing + 4 new). All UI flows verified end-to-end via Playwright.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Edit dialogs / ConfirmDialog", "issues": ["Radix a11y warning 'Missing Description or aria-describedby for DialogContent' on client-edit-dialog, agency-edit-dialog, confirm-dialog (and QR dialog). Non-blocking, carried over from prior iterations."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_detail_pages_and_delete.py",
+    "/app/backend/tests/test_status_restrictions_and_management.py",
+    "/app/backend/tests/test_agencies_and_edit.py",
+    "/app/backend/tests/test_cargolink_api.py",
+    "/app/test_reports/pytest/iter8_results.xml",
+    "/app/test_reports/pytest/iter8_full.xml"
+  ],
+  "action_items": [
+    "(Optional, low priority) Add DialogDescription to confirm-dialog / client-edit-dialog / agency-edit-dialog / QR dialog to silence Radix a11y warnings.",
+    "(Carried over) /api/auth/login still returns 500 instead of 401 when a staff-created client has no password_hash (no create_account). Existing test in test_agencies_and_edit.py accepts both statuses pending the fix."
+  ],
+  "critical_code_review_comments": [
+    "ConfirmDialog properly closes via DialogContent's onOpenChange -> onCancel(); confirm-ok and confirm-cancel testids exposed; danger styling matches red brand. Used consistently in ClientDetailPage, AgencyDetailPage and ShipmentDetail.",
+    "GET /api/agencies/{id} is admin-only (require_admin) and returns serialize_user(a) + created_count. Verified: admin->200 with correct fields; agence->403; deleted agency->404.",
+    "ClientDetailPage and AgencyDetailPage correctly use back-btn (Link to list), navigate to list after delete, and reload data after edit.",
+    "ClientsList and AgenciesPage rows have cursor:pointer and contain NO inner buttons (verified via DOM inspection on agency row). Icon buttons live on detail pages only with aria-label Modifier / Supprimer (no visible text).",
+    "Shipment cancel button on /shipment/:id correctly opens confirm-dialog (NOT window.confirm), and confirm-ok calls PUT /api/shipments/{id}/cancel -> status 'annule'. Verified by inspecting GET /shipments/{id} response after click.",
+    "All tracking numbers correctly start with 'CL' (verified CL2263890841 in last cancel test).",
+    "Backend EDITABLE_STATUSES enforcement, role guards (require_staff for clients, require_admin for agencies), email duplication checks, and ObjectId handling all remain correct from iteration 7."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_detail_pages_and_delete.py (NEW - 4 tests for GET /agencies/{id}, GET /clients/{id}, full delete-then-404 flows, role guards)"
+  ],
+  "success_rate": {"backend": "100% (70/70 = 66 existing + 4 new)", "frontend": "100% (8/8 UI checks: agency row click + back-btn + icon edit + icon delete cancel + icon delete confirm + agence client delete via confirm-dialog + shipment cancel via confirm-dialog + nav-bo-agencies hidden for agence)"},
+  "test_credentials": "admin@cargolink.ma/admin123 ; agence.casa@cargolink.ma/agence123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created a few TEST_ prefixed agencies and clients during tests; all deleted by their own delete tests except 2 leftover TEST_ agencies from earlier iterations still listed in UI. Main agent may run cleanup if needed; no production data modified.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All MVP fixes verified end-to-end. Selectors used: confirm-dialog, confirm-ok, confirm-cancel, client-row-<email>, agency-row-<email>, client-detail-page, agency-detail-page, back-btn, client-edit-btn, client-delete-btn, agency-edit-btn, agency-delete-btn, client-edit-dialog, agency-edit-dialog, edit-client-first-name/last-name/email/phone/address/save, edit-agency-name/email/phone/address/save, cancel-shipment-btn. The new agency-create form on /back-office/agencies uses inline fields agency-name/email/phone/address with a save button (we created agencies via API in the test to avoid flakiness, but the UI form is functional - see iteration 7). 70/70 pytest pass; pytest junit at /app/test_reports/pytest/iter8_full.xml.",
+  "rca of the issue": "N/A - verification pass. All iteration-8 changes (ConfirmDialog replacing window.confirm, detail pages with back-btn, icon-only edit/delete actions, row-click navigation) behave exactly as specified in the PRD."
+}

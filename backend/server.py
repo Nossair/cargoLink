@@ -745,6 +745,18 @@ async def create_agency(data: AgencyCreateInput, user: dict = Depends(get_curren
     return out
 
 
+@api_router.get("/agencies/{agency_id}")
+async def get_agency(agency_id: str, user: dict = Depends(get_current_user)):
+    require_admin(user)
+    a = await db.users.find_one({"_id": ObjectId(agency_id), "role": "agence"})
+    if not a:
+        raise HTTPException(status_code=404, detail="Agence introuvable")
+    out = serialize_user(a)
+    out["created_count"] = await db.shipments.count_documents({"created_by": agency_id})
+    return out
+
+
+
 @api_router.put("/agencies/{agency_id}")
 async def update_agency(agency_id: str, data: AgencyUpdateInput, user: dict = Depends(get_current_user)):
     require_admin(user)

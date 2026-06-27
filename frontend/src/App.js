@@ -16,7 +16,9 @@ import ShipmentDetail from "./pages/ShipmentDetail";
 import BackofficeDashboard from "./pages/BackofficeDashboard";
 import ShipmentsList from "./pages/ShipmentsList";
 import ClientsList from "./pages/ClientsList";
+import ClientDetailPage from "./pages/ClientDetailPage";
 import Agencies from "./pages/Agencies";
+import AgencyDetailPage from "./pages/AgencyDetailPage";
 import EditShipment from "./pages/EditShipment";
 import Scanner from "./pages/Scanner";
 
@@ -43,7 +45,9 @@ function App() {
                 <Route path="/back-office/new-shipment" element={<ProtectedRoute staffOnly><NewShipment /></ProtectedRoute>} />
                 <Route path="/back-office/shipments" element={<ProtectedRoute staffOnly><ShipmentsList /></ProtectedRoute>} />
                 <Route path="/back-office/clients" element={<ProtectedRoute staffOnly><ClientsList /></ProtectedRoute>} />
+                <Route path="/back-office/clients/:id" element={<ProtectedRoute staffOnly><ClientDetailPage /></ProtectedRoute>} />
                 <Route path="/back-office/agencies" element={<ProtectedRoute staffOnly><Agencies /></ProtectedRoute>} />
+                <Route path="/back-office/agencies/:id" element={<ProtectedRoute staffOnly><AgencyDetailPage /></ProtectedRoute>} />
                 <Route path="/scanner" element={<ProtectedRoute staffOnly><Scanner /></ProtectedRoute>} />
               </Routes>
             </main>

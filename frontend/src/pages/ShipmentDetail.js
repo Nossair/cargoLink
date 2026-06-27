@@ -5,6 +5,7 @@ import api, { formatApiError } from "../lib/api";
 import { useI18n } from "../i18n";
 import { useAuth, isStaff } from "../context/AuthContext";
 import { Timeline, StatusBadge } from "../components/Timeline";
+import ConfirmDialog from "../components/ConfirmDialog";
 import { EstimateView } from "./NewShipment";
 import { DownloadSimple, PencilSimple, XCircle } from "@phosphor-icons/react";
 
@@ -13,6 +14,7 @@ export default function ShipmentDetail() {
   const { t } = useI18n();
   const { user } = useAuth();
   const [s, setS] = useState(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const load = () => api.get(`/shipments/${id}`).then((r) => setS(r.data)).catch(() => setS(false));
   useEffect(() => { load(); }, [id]);
@@ -23,12 +25,12 @@ export default function ShipmentDetail() {
   const editable = ["demande_creee", "en_attente_collecte"].includes(s.status);
 
   const cancel = async () => {
-    if (!window.confirm(t("confirm_cancel"))) return;
     try {
       await api.put(`/shipments/${id}/cancel`);
       toast.success(t("shipment_cancelled"));
+      setConfirmCancel(false);
       load();
-    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); setConfirmCancel(false); }
   };
 
   const download = async () => {
@@ -65,7 +67,7 @@ export default function ShipmentDetail() {
             </Link>
           )}
           {editable && (
-            <button onClick={cancel} data-testid="cancel-shipment-btn"
+            <button onClick={() => setConfirmCancel(true)} data-testid="cancel-shipment-btn"
               className="inline-flex items-center gap-2 border border-[#FF2400]/40 text-[#FF2400] px-4 py-2 rounded-sm text-sm font-medium hover:bg-[#FF2400]/5 transition-colors">
               <XCircle size={16} /> {t("cancel_shipment")}
             </button>
@@ -107,6 +109,8 @@ export default function ShipmentDetail() {
           </button>
         </div>
       </div>
+
+      <ConfirmDialog open={confirmCancel} message={t("confirm_cancel")} onConfirm={cancel} onCancel={() => setConfirmCancel(false)} />
     </div>
   );
 }
