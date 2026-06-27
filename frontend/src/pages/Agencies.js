@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
 import { useI18n } from "../i18n";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { Buildings, Plus, Copy, CheckCircle } from "@phosphor-icons/react";
+import { Buildings, Plus, Copy, CheckCircle, PencilSimple, Trash } from "@phosphor-icons/react";
 
 export default function Agencies() {
   const { t } = useI18n();
@@ -11,10 +11,30 @@ export default function Agencies() {
   const [form, setForm] = useState({ agency_name: "", email: "", phone: "", address: "" });
   const [created, setCreated] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [edit, setEdit] = useState(null);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   const load = () => api.get("/agencies").then((r) => setAgencies(r.data)).catch(() => {});
   useEffect(() => { load(); }, []);
+
+  const saveEdit = async (e) => {
+    e.preventDefault();
+    try {
+      await api.put(`/agencies/${edit.id}`, {
+        agency_name: edit.agency_name, email: edit.email, phone: edit.phone, address: edit.address,
+      });
+      toast.success(t("agency_updated"));
+      setEdit(null); load();
+    } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
+  };
+
+  const remove = async (a) => {
+    if (!window.confirm(t("confirm_delete_agency"))) return;
+    try {
+      await api.delete(`/agencies/${a.id}`);
+      toast.success(t("agency_deleted")); load();
+    } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -57,6 +77,7 @@ export default function Agencies() {
                 <th className="text-start p-3 font-medium">{t("email")}</th>
                 <th className="text-start p-3 font-medium">{t("phone")}</th>
                 <th className="text-start p-3 font-medium">{t("created_count")}</th>
+                <th className="text-start p-3 font-medium">{t("actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -66,6 +87,12 @@ export default function Agencies() {
                   <td className="p-3 text-muted-foreground">{a.email}</td>
                   <td className="p-3">{a.phone}</td>
                   <td className="p-3">{a.created_count}</td>
+                  <td className="p-3">
+                    <div className="flex items-center gap-3">
+                      <button data-testid={`agency-edit-${a.email}`} onClick={() => setEdit({ ...a })} className="inline-flex items-center gap-1 font-medium hover:brand-text transition-colors"><PencilSimple size={15} /> {t("edit")}</button>
+                      <button data-testid={`agency-delete-${a.email}`} onClick={() => remove(a)} className="inline-flex items-center gap-1 text-[#FF2400] font-medium hover:opacity-80 transition-opacity"><Trash size={15} /> {t("delete")}</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -91,6 +118,21 @@ export default function Agencies() {
             </div>
             <p className="text-xs text-[#FF2400]">{t("agency_created_note")}</p>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!edit} onOpenChange={(o) => !o && setEdit(null)}>
+        <DialogContent data-testid="agency-edit-dialog" className="max-w-md">
+          <DialogHeader><DialogTitle>{t("edit_agency")}</DialogTitle></DialogHeader>
+          {edit && (
+            <form onSubmit={saveEdit} className="space-y-3">
+              <div><Label>{t("agency_name")}</Label><input data-testid="edit-agency-name" required value={edit.agency_name} onChange={(e) => setEdit({ ...edit, agency_name: e.target.value })} className={cls} /></div>
+              <div><Label>{t("email")}</Label><input data-testid="edit-agency-email" type="email" required value={edit.email} onChange={(e) => setEdit({ ...edit, email: e.target.value })} className={cls} /></div>
+              <div><Label>{t("phone")}</Label><input data-testid="edit-agency-phone" required value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} className={cls} /></div>
+              <div><Label>{t("address")}</Label><input data-testid="edit-agency-address" required value={edit.address || ""} onChange={(e) => setEdit({ ...edit, address: e.target.value })} className={cls} /></div>
+              <button data-testid="edit-agency-save" className="w-full brand-bg text-white py-2.5 rounded-sm font-medium hover:opacity-90 transition-opacity">{t("save")}</button>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>

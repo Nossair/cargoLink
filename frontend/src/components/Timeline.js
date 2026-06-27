@@ -8,6 +8,7 @@ const STATUS_COLOR = {
   en_transit: "#002FA7",
   en_douane: "#FF2400",
   livre: "#008A00",
+  annule: "#FF2400",
 };
 
 export function StatusBadge({ status }) {
@@ -27,6 +28,18 @@ export function StatusBadge({ status }) {
 
 export function Timeline({ status, history = [] }) {
   const { t } = useI18n();
+  if (status === "annule") {
+    const entry = [...history].reverse().find((h) => h.status === "annule");
+    return (
+      <div data-testid="tracking-timeline" className="border border-[#FF2400]/40 rounded-sm p-6 bg-[#FF2400]/5">
+        <div className="flex items-center gap-3">
+          <span className="w-3 h-3 rounded-full bg-[#FF2400]" />
+          <span className="font-medium text-[#FF2400]">{t("st_annule")}</span>
+        </div>
+        {entry && <div className="text-xs text-muted-foreground mt-2">{new Date(entry.at).toLocaleString()}</div>}
+      </div>
+    );
+  }
   const current = STATUS_FLOW.indexOf(status);
   return (
     <div data-testid="tracking-timeline" className="border border-black/10 rounded-sm">

@@ -6,7 +6,7 @@ import { useI18n } from "../i18n";
 import { useAuth, isStaff } from "../context/AuthContext";
 import { Timeline, StatusBadge } from "../components/Timeline";
 import { EstimateView } from "./NewShipment";
-import { DownloadSimple, PencilSimple } from "@phosphor-icons/react";
+import { DownloadSimple, PencilSimple, XCircle } from "@phosphor-icons/react";
 
 export default function ShipmentDetail() {
   const { id } = useParams();
@@ -14,12 +14,22 @@ export default function ShipmentDetail() {
   const { user } = useAuth();
   const [s, setS] = useState(null);
 
-  useEffect(() => { api.get(`/shipments/${id}`).then((r) => setS(r.data)).catch(() => setS(false)); }, [id]);
+  const load = () => api.get(`/shipments/${id}`).then((r) => setS(r.data)).catch(() => setS(false));
+  useEffect(() => { load(); }, [id]);
 
   if (s === null) return <div className="max-w-5xl mx-auto px-4 py-12 font-mono text-sm text-muted-foreground">{t("loading")}</div>;
   if (!s) return <div className="max-w-5xl mx-auto px-4 py-12 text-[#FF2400]">404</div>;
 
-  const canEdit = isStaff(user) || ["demande_creee", "en_attente_collecte"].includes(s.status);
+  const editable = ["demande_creee", "en_attente_collecte"].includes(s.status);
+
+  const cancel = async () => {
+    if (!window.confirm(t("confirm_cancel"))) return;
+    try {
+      await api.put(`/shipments/${id}/cancel`);
+      toast.success(t("shipment_cancelled"));
+      load();
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+  };
 
   const download = async () => {
     try {
@@ -48,11 +58,17 @@ export default function ShipmentDetail() {
           <h1 className="font-mono font-bold text-2xl">{s.tracking_number}</h1>
         </div>
         <div className="flex items-center gap-3">
-          {canEdit && (
+          {editable && (
             <Link to={`/shipment/${s.id}/edit`} data-testid="edit-shipment-btn"
               className="inline-flex items-center gap-2 border border-black/15 px-4 py-2 rounded-sm text-sm font-medium hover:bg-secondary transition-colors">
               <PencilSimple size={16} /> {t("edit")}
             </Link>
+          )}
+          {editable && (
+            <button onClick={cancel} data-testid="cancel-shipment-btn"
+              className="inline-flex items-center gap-2 border border-[#FF2400]/40 text-[#FF2400] px-4 py-2 rounded-sm text-sm font-medium hover:bg-[#FF2400]/5 transition-colors">
+              <XCircle size={16} /> {t("cancel_shipment")}
+            </button>
           )}
           <StatusBadge status={s.status} />
         </div>

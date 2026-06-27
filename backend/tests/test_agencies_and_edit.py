@@ -263,19 +263,15 @@ class TestEditShipment:
         assert body["recipient"]["first_name"] == "Updated"
         assert any(h.get("note") == "Envoi modifié" for h in body["history"])
 
-    def test_staff_can_edit_anytime_even_in_transit(self, shipment_owned_by_client, admin_s, agence_s):
+    def test_staff_cannot_edit_when_in_transit(self, shipment_owned_by_client, admin_s, agence_s):
+        # NEW business rule: edit forbidden once status is past en_attente_collecte, even for staff.
         ship_id = shipment_owned_by_client["ship"]["id"]
-        # Move to en_transit
         rs = admin_s.put(f"{API}/shipments/{ship_id}/status",
                          json={"status": "en_transit", "note": "now in transit"}, timeout=10)
         assert rs.status_code == 200
-        # Agence edits while in_transit
         r = agence_s.put(f"{API}/shipments/{ship_id}",
                          json=_edit_payload(weight=9.9, rcpt_first="StaffEdited"), timeout=15)
-        assert r.status_code == 200, r.text
-        assert r.json()["parcel"]["weight"] == 9.9
-        # Status preserved
-        assert r.json()["status"] == "en_transit"
+        assert r.status_code == 403, r.text
 
     def test_client_cannot_edit_when_status_advanced(self, shipment_owned_by_client):
         cs = shipment_owned_by_client["client_session"]

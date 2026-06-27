@@ -124,6 +124,21 @@ class AgencyCreateInput(BaseModel):
     address: str
 
 
+class ClientUpdateInput(BaseModel):
+    first_name: str
+    last_name: str
+    email: EmailStr
+    phone: str
+    address: str
+
+
+class AgencyUpdateInput(BaseModel):
+    agency_name: str
+    email: EmailStr
+    phone: str
+    address: str
+
+
 class StatusUpdateInput(BaseModel):
     status: str
     note: Optional[str] = None
@@ -228,6 +243,7 @@ STATUS_LABELS = {
     "en_transit": "En transit",
     "en_douane": "En douane",
     "livre": "Livre",
+    "annule": "Annule",
 }
 CATEGORY_LABELS = {
     "habillement": "Habillement", "electronique": "Electronique",
@@ -493,7 +509,7 @@ async def create_shipment(data: ShipmentInput, user: dict = Depends(get_current_
     return out
 
 
-EDITABLE_BY_CLIENT_STATUSES = ("demande_creee", "en_attente_collecte")
+EDITABLE_STATUSES = ("demande_creee", "en_attente_collecte")
 
 
 @api_router.put("/shipments/{shipment_id}")
@@ -502,11 +518,10 @@ async def edit_shipment(shipment_id: str, data: ShipmentEditInput, user: dict = 
     if not doc:
         raise HTTPException(status_code=404, detail="Colis introuvable")
     staff = user.get("role") in STAFF_ROLES
-    if not staff:
-        if doc["client_id"] != str(user["_id"]):
-            raise HTTPException(status_code=403, detail="Accès refusé")
-        if doc["status"] not in EDITABLE_BY_CLIENT_STATUSES:
-            raise HTTPException(status_code=403, detail="Modification impossible : le colis est déjà pris en charge")
+    if not staff and doc["client_id"] != str(user["_id"]):
+        raise HTTPException(status_code=403, detail="Accès refusé")
+    if doc["status"] not in EDITABLE_STATUSES:
+        raise HTTPException(status_code=403, detail="Modification impossible : le colis est déjà pris en charge")
     est = compute_estimate(data.parcel.weight, data.origin_country,
                            data.recipient.country, data.parcel.category, data.parcel.declared_value)
     now = datetime.now(timezone.utc).isoformat()
@@ -521,6 +536,25 @@ async def edit_shipment(shipment_id: str, data: ShipmentEditInput, user: dict = 
         "notes": data.notes,
         "estimate": est,
     }, "$push": {"history": entry}})
+    updated = await db.shipments.find_one({"_id": ObjectId(shipment_id)})
+    return serialize_shipment(updated)
+
+
+@api_router.put("/shipments/{shipment_id}/cancel")
+async def cancel_shipment(shipment_id: str, user: dict = Depends(get_current_user)):
+    doc = await db.shipments.find_one({"_id": ObjectId(shipment_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Colis introuvable")
+    staff = user.get("role") in STAFF_ROLES
+    if not staff and doc["client_id"] != str(user["_id"]):
+        raise HTTPException(status_code=403, detail="Accès refusé")
+    if doc["status"] not in EDITABLE_STATUSES:
+        raise HTTPException(status_code=403, detail="Annulation impossible : le colis est déjà pris en charge")
+    now = datetime.now(timezone.utc).isoformat()
+    entry = {"status": "annule", "note": "Envoi annulé", "at": now,
+             "by": user.get("agency_name") or f"{user['first_name']} {user['last_name']}"}
+    await db.shipments.update_one({"_id": ObjectId(shipment_id)},
+                                  {"$set": {"status": "annule"}, "$push": {"history": entry}})
     updated = await db.shipments.find_one({"_id": ObjectId(shipment_id)})
     return serialize_shipment(updated)
 
@@ -631,6 +665,34 @@ async def client_detail(client_id: str, user: dict = Depends(get_current_user)):
     return {"client": serialize_user(c), "shipments": [serialize_shipment(s) for s in shipments]}
 
 
+@api_router.put("/clients/{client_id}")
+async def update_client(client_id: str, data: ClientUpdateInput, user: dict = Depends(get_current_user)):
+    require_staff(user)
+    c = await db.users.find_one({"_id": ObjectId(client_id), "role": "client"})
+    if not c:
+        raise HTTPException(status_code=404, detail="Client introuvable")
+    email = data.email.lower()
+    dup = await db.users.find_one({"email": email, "_id": {"$ne": ObjectId(client_id)}})
+    if dup:
+        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
+    await db.users.update_one({"_id": ObjectId(client_id)}, {"$set": {
+        "first_name": data.first_name, "last_name": data.last_name,
+        "email": email, "phone": data.phone, "address": data.address,
+    }})
+    updated = await db.users.find_one({"_id": ObjectId(client_id)})
+    return serialize_user(updated)
+
+
+@api_router.delete("/clients/{client_id}")
+async def delete_client(client_id: str, user: dict = Depends(get_current_user)):
+    require_staff(user)
+    c = await db.users.find_one({"_id": ObjectId(client_id), "role": "client"})
+    if not c:
+        raise HTTPException(status_code=404, detail="Client introuvable")
+    await db.users.delete_one({"_id": ObjectId(client_id)})
+    return {"ok": True}
+
+
 @api_router.get("/dashboard/stats")
 async def dashboard_stats(user: dict = Depends(get_current_user)):
     require_staff(user)
@@ -681,6 +743,34 @@ async def create_agency(data: AgencyCreateInput, user: dict = Depends(get_curren
     out = serialize_user(doc)
     out["generated_password"] = pw
     return out
+
+
+@api_router.put("/agencies/{agency_id}")
+async def update_agency(agency_id: str, data: AgencyUpdateInput, user: dict = Depends(get_current_user)):
+    require_admin(user)
+    a = await db.users.find_one({"_id": ObjectId(agency_id), "role": "agence"})
+    if not a:
+        raise HTTPException(status_code=404, detail="Agence introuvable")
+    email = data.email.lower()
+    dup = await db.users.find_one({"email": email, "_id": {"$ne": ObjectId(agency_id)}})
+    if dup:
+        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
+    await db.users.update_one({"_id": ObjectId(agency_id)}, {"$set": {
+        "agency_name": data.agency_name, "first_name": data.agency_name,
+        "email": email, "phone": data.phone, "address": data.address,
+    }})
+    updated = await db.users.find_one({"_id": ObjectId(agency_id)})
+    return serialize_user(updated)
+
+
+@api_router.delete("/agencies/{agency_id}")
+async def delete_agency(agency_id: str, user: dict = Depends(get_current_user)):
+    require_admin(user)
+    a = await db.users.find_one({"_id": ObjectId(agency_id), "role": "agence"})
+    if not a:
+        raise HTTPException(status_code=404, detail="Agence introuvable")
+    await db.users.delete_one({"_id": ObjectId(agency_id)})
+    return {"ok": True}
 
 
 app.include_router(api_router)

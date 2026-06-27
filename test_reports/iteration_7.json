@@ -1,0 +1,39 @@
+{
+  "summary": "Full backend + UI testing of the new business rules: (1) shipment modification restricted by status for ALL roles, (2) cancel shipment -> status 'annule', (3) client management by agence/admin, (4) agency management admin-only. 16 new backend tests + 15 existing backend tests = 31/31 pass. UI verified end-to-end on /shipment/:id (client + agence flows), /back-office/clients (agence), /back-office/agencies (admin only).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "QR / edit dialogs", "issues": ["Carried over from prior iterations: Radix a11y warning 'Missing Description or aria-describedby={undefined} for DialogContent' for QR dialog and possibly the new client-edit-dialog / agency-edit-dialog. Non-blocking."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_status_restrictions_and_management.py",
+    "/app/backend/tests/test_agencies_and_edit.py",
+    "/app/test_reports/pytest/iter7_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Add DialogDescription to client-edit-dialog / agency-edit-dialog / QR dialog to silence Radix a11y warnings.",
+    "(Carried over from iteration_5) /api/auth/login still returns 500 instead of 401 when user has no password_hash (e.g., staff-created client without create_account). Existing test in test_agencies_and_edit.py accepts both statuses pending the fix."
+  ],
+  "critical_code_review_comments": [
+    "Backend EDITABLE_STATUSES=('demande_creee','en_attente_collecte') is now applied uniformly in PUT /api/shipments/{id} and PUT /api/shipments/{id}/cancel. Cancel handler correctly enforces ownership for clients and pushes a clean history entry with by/agency_name. Status 'annule' is excluded from STATUS_FLOW (so /status endpoint cannot accidentally set it) and only appears via /cancel, which is correct.",
+    "PUT /api/clients/{id} & DELETE /api/clients/{id} guarded by require_staff (admin/agence/agent). PUT validates duplicate email. Both respond 404 when client_id is for a non-client. Good.",
+    "PUT /api/agencies/{id} & DELETE /api/agencies/{id} guarded by require_admin. Tested: agence -> 403 confirmed.",
+    "Frontend ShipmentDetail correctly hides edit-shipment-btn AND cancel-shipment-btn when status not in EDITABLE_STATUSES (verified for both client and agence on an en_transit shipment).",
+    "Frontend Timeline renders annule with red status color and dedicated branch (verified via screenshot showing red dot + 'Annulé' label).",
+    "Frontend ClientsList exposes client-edit-<email>/client-delete-<email>/client-edit-dialog + all sub-fields. AgenciesPage exposes agency-edit-<email>/agency-delete-<email>/agency-edit-dialog with all sub-fields. Nav link nav-bo-agencies is hidden for agence (verified)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_status_restrictions_and_management.py (NEW)",
+    "/app/backend/tests/test_agencies_and_edit.py (updated test_staff_can_edit_anytime_even_in_transit -> test_staff_cannot_edit_when_in_transit to reflect the new business rule)"
+  ],
+  "success_rate": {"backend": "100% (31/31 incl. 16 new + 15 existing)", "frontend": "100% (all 4 UI flows pass: client cancel, agence cancel, edit/cancel hidden on en_transit, agencies CRUD admin-only)"},
+  "test_credentials": "admin@cargolink.ma/admin123 ; agence.casa@cargolink.ma/agence123 ; agent@cargolink.ma/agent123 ; clients created on-the-fly via /auth/register",
+  "seed_data_creation": "Created several TEST_ prefixed clients + shipments + agencies during tests. Agencies created by admin tests are deleted at end of their test; client+shipment fixtures rely on the existing seeded super-admin to advance status. No production data modified.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All new business rules verified end-to-end. Selectors used in UI tests: login-email/login-password/login-submit, nav-bo-agencies, client-edit-<email>, client-delete-<email>, client-edit-dialog, edit-client-first-name/last-name/email/phone/address/save, agency-edit-<email>, agency-delete-<email>, agency-edit-dialog, edit-agency-name/email/phone/address/save, edit-shipment-btn, cancel-shipment-btn. The window.confirm dialogs are auto-accepted via page.on('dialog', d.accept). Pre-existing carry-over: login returns 500 instead of 401 for password-less users (covered in test_agencies_and_edit.py with status_code in (401,500)).",
+  "rca of the issue": "N/A - this iteration is a verification pass; all features behave as specified by the PRD."
+}
