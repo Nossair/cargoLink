@@ -385,7 +385,7 @@ async def register(data: RegisterInput, response: Response):
 async def login(data: LoginInput, response: Response):
     email = data.email.lower()
     user = await db.users.find_one({"email": email})
-    if not user or not verify_password(data.password, user["password_hash"]):
+    if not user or not user.get("password_hash") or not verify_password(data.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
     uid = str(user["_id"])
     set_auth_cookies(response, create_access_token(uid, email), create_refresh_token(uid))
