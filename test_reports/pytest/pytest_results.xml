@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="17" failures="1" skipped="0" tests="26" time="3.108" timestamp="2026-06-27T15:40:19.857635+00:00" hostname="agent-env-f5afe187-6cfb-4694-aa88-f8d1eab06226"><testcase classname="tests.test_cargolink_api.TestAuth" name="test_register_returns_user_and_sets_cookie" time="0.389"><failure message="AssertionError: assert 'test_reg_eixgh2fh@test.com' == 'TEST_reg_eixgh2fh@test.com'&#10;  &#10;  - TEST_reg_eixgh2fh@test.com&#10;  ? ^^^^&#10;  + test_reg_eixgh2fh@test.com&#10;  ? ^^^^">backend/tests/test_cargolink_api.py:98: in test_register_returns_user_and_sets_cookie
+    assert body["email"] == payload["email"]
+E   AssertionError: assert 'test_reg_eixgh2fh@test.com' == 'TEST_reg_eixgh2fh@test.com'
+E     
+E     - TEST_reg_eixgh2fh@test.com
+E     ? ^^^^
+E     + test_reg_eixgh2fh@test.com
+E     ? ^^^^</failure></testcase><testcase classname="tests.test_cargolink_api.TestShipments" name="test_create_shipment" time="0.679"><error message="failed on setup with &quot;AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'&#10;  &#10;  - TEST_client_nx4ny669@test.com&#10;  ? ^^^^&#10;  + test_client_nx4ny669@test.com&#10;  ? ^^^^&quot;">backend/tests/test_cargolink_api.py:37: in client_user
+    assert data["email"] == payload["email"]
+E   AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'
+E     
+E     - TEST_client_nx4ny669@test.com
+E     ? ^^^^
+E     + test_client_nx4ny669@test.com
+E     ? ^^^^</error></testcase><testcase classname="tests.test_cargolink_api.TestShipments" name="test_list_shipments_client_isolation" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'&#10;  &#10;  - TEST_client_nx4ny669@test.com&#10;  ? ^^^^&#10;  + test_client_nx4ny669@test.com&#10;  ? ^^^^&quot;">backend/tests/test_cargolink_api.py:37: in client_user
+    assert data["email"] == payload["email"]
+E   AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'
+E     
+E     - TEST_client_nx4ny669@test.com
+E     ? ^^^^
+E     + test_client_nx4ny669@test.com
+E     ? ^^^^</error></testcase><testcase classname="tests.test_cargolink_api.TestAuth" name="test_register_duplicate_email" time="0.534"><error message="failed on setup with &quot;AssertionError: assert 'test_client_...nrhn@test.com' == 'TEST_client_...nrhn@test.com'&#10;  &#10;  - TEST_client_merlnrhn@test.com&#10;  ? ^^^^&#10;  + test_client_merlnrhn@test.com&#10;  ? ^^^^&quot;">backend/tests/test_cargolink_api.py:37: in client_user
+    assert data["email"] == payload["email"]
+E   AssertionError: assert 'test_client_...nrhn@test.com' == 'TEST_client_...nrhn@test.com'
+E     
+E     - TEST_client_merlnrhn@test.com
+E     ? ^^^^
+E     + test_client_merlnrhn@test.com
+E     ? ^^^^</error></testcase><testcase classname="tests.test_cargolink_api.TestShipments" name="test_list_shipments_admin_sees_all" time="0.509"><error message="failed on setup with &quot;AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'&#10;  &#10;  - TEST_client_nx4ny669@test.com&#10;  ? ^^^^&#10;  + test_client_nx4ny669@test.com&#10;  ? ^^^^&quot;">backend/tests/test_cargolink_api.py:37: in client_user
+    assert data["email"] == payload["email"]
+E   AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'
+E     
+E     - TEST_client_nx4ny669@test.com
+E     ? ^^^^
+E     + test_client_nx4ny669@test.com
+E     ? ^^^^</error></testcase><testcase classname="tests.test_cargolink_api.TestShipments" name="test_track_public" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'&#10;  &#10;  - TEST_client_nx4ny669@test.com&#10;  ? ^^^^&#10;  + test_client_nx4ny669@test.com&#10;  ? ^^^^&quot;">backend/tests/test_cargolink_api.py:37: in client_user
+    assert data["email"] == payload["email"]
+E   AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'
+E     
+E     - TEST_client_nx4ny669@test.com
+E     ? ^^^^
+E     + test_client_nx4ny669@test.com
+E     ? ^^^^</error></testcase><testcase classname="tests.test_cargolink_api.TestShipments" name="test_track_invalid" time="0.252" /><testcase classname="tests.test_cargolink_api.TestAuth" name="test_login_admin" time="0.591" /><testcase classname="tests.test_cargolink_api.TestShipments" name="test_get_shipment_owner" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'&#10;  &#10;  - TEST_client_nx4ny669@test.com&#10;  ? ^^^^&#10;  + test_client_nx4ny669@test.com&#10;  ? ^^^^&quot;">backend/tests/test_cargolink_api.py:37: in client_user
+    assert data["email"] == payload["email"]
+E   AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'
+E     
+E     - TEST_client_nx4ny669@test.com
+E     ? ^^^^
+E     + test_client_nx4ny669@test.com
+E     ? ^^^^</error></testcase><testcase classname="tests.test_cargolink_api.TestShipments" name="test_get_shipment_other_client_forbidden" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'&#10;  &#10;  - TEST_client_nx4ny669@test.com&#10;  ? ^^^^&#10;  + test_client_nx4ny669@test.com&#10;  ? ^^^^&quot;">backend/tests/test_cargolink_api.py:37: in client_user
+    assert data["email"] == payload["email"]
+E   AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'
+E     
+E     - TEST_client_nx4ny669@test.com
+E     ? ^^^^
+E     + test_client_nx4ny669@test.com
+E     ? ^^^^</error></testcase><testcase classname="tests.test_cargolink_api.TestShipments" name="test_status_update_persists_and_appears_in_track" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'&#10;  &#10;  - TEST_client_nx4ny669@test.com&#10;  ? ^^^^&#10;  + test_client_nx4ny669@test.com&#10;  ? ^^^^&quot;">backend/tests/test_cargolink_api.py:37: in client_user
+    assert data["email"] == payload["email"]
+E   AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'
+E     
+E     - TEST_client_nx4ny669@test.com
+E     ? ^^^^
+E     + test_client_nx4ny669@test.com
+E     ? ^^^^</error></testcase><testcase classname="tests.test_cargolink_api.TestShipments" name="test_status_update_invalid" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'&#10;  &#10;  - TEST_client_nx4ny669@test.com&#10;  ? ^^^^&#10;  + test_client_nx4ny669@test.com&#10;  ? ^^^^&quot;">backend/tests/test_cargolink_api.py:37: in client_user
+    assert data["email"] == payload["email"]
+E   AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'
+E     
+E     - TEST_client_nx4ny669@test.com
+E     ? ^^^^
+E     + test_client_nx4ny669@test.com
+E     ? ^^^^</error></testcase><testcase classname="tests.test_cargolink_api.TestShipments" name="test_client_cannot_update_status" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'&#10;  &#10;  - TEST_client_nx4ny669@test.com&#10;  ? ^^^^&#10;  + test_client_nx4ny669@test.com&#10;  ? ^^^^&quot;">backend/tests/test_cargolink_api.py:37: in client_user
+    assert data["email"] == payload["email"]
+E   AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'
+E     
+E     - TEST_client_nx4ny669@test.com
+E     ? ^^^^
+E     + test_client_nx4ny669@test.com
+E     ? ^^^^</error></testcase><testcase classname="tests.test_cargolink_api.TestClientsDashboard" name="test_list_clients_staff" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'&#10;  &#10;  - TEST_client_nx4ny669@test.com&#10;  ? ^^^^&#10;  + test_client_nx4ny669@test.com&#10;  ? ^^^^&quot;">backend/tests/test_cargolink_api.py:37: in client_user
+    assert data["email"] == payload["email"]
+E   AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'
+E     
+E     - TEST_client_nx4ny669@test.com
+E     ? ^^^^
+E     + test_client_nx4ny669@test.com
+E     ? ^^^^</error></testcase><testcase classname="tests.test_cargolink_api.TestClientsDashboard" name="test_list_clients_forbidden_for_client" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'&#10;  &#10;  - TEST_client_nx4ny669@test.com&#10;  ? ^^^^&#10;  + test_client_nx4ny669@test.com&#10;  ? ^^^^&quot;">backend/tests/test_cargolink_api.py:37: in client_user
+    assert data["email"] == payload["email"]
+E   AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'
+E     
+E     - TEST_client_nx4ny669@test.com
+E     ? ^^^^
+E     + test_client_nx4ny669@test.com
+E     ? ^^^^</error></testcase><testcase classname="tests.test_cargolink_api.TestClientsDashboard" name="test_client_detail" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'&#10;  &#10;  - TEST_client_nx4ny669@test.com&#10;  ? ^^^^&#10;  + test_client_nx4ny669@test.com&#10;  ? ^^^^&quot;">backend/tests/test_cargolink_api.py:37: in client_user
+    assert data["email"] == payload["email"]
+E   AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'
+E     
+E     - TEST_client_nx4ny669@test.com
+E     ? ^^^^
+E     + test_client_nx4ny669@test.com
+E     ? ^^^^</error></testcase><testcase classname="tests.test_cargolink_api.TestClientsDashboard" name="test_dashboard_stats" time="0.089" /><testcase classname="tests.test_cargolink_api.TestClientsDashboard" name="test_dashboard_forbidden_for_client" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'&#10;  &#10;  - TEST_client_nx4ny669@test.com&#10;  ? ^^^^&#10;  + test_client_nx4ny669@test.com&#10;  ? ^^^^&quot;">backend/tests/test_cargolink_api.py:37: in client_user
+    assert data["email"] == payload["email"]
+E   AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'
+E     
+E     - TEST_client_nx4ny669@test.com
+E     ? ^^^^
+E     + test_client_nx4ny669@test.com
+E     ? ^^^^</error></testcase><testcase classname="tests.test_cargolink_api.TestAuth" name="test_login_agent" time="0.583" /><testcase classname="tests.test_cargolink_api.TestScanner" name="test_scan_lookup_staff" time="0.486"><error message="failed on setup with &quot;AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'&#10;  &#10;  - TEST_client_nx4ny669@test.com&#10;  ? ^^^^&#10;  + test_client_nx4ny669@test.com&#10;  ? ^^^^&quot;">backend/tests/test_cargolink_api.py:37: in client_user
+    assert data["email"] == payload["email"]
+E   AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'
+E     
+E     - TEST_client_nx4ny669@test.com
+E     ? ^^^^
+E     + test_client_nx4ny669@test.com
+E     ? ^^^^</error></testcase><testcase classname="tests.test_cargolink_api.TestScanner" name="test_scan_lookup_forbidden_for_client" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'&#10;  &#10;  - TEST_client_nx4ny669@test.com&#10;  ? ^^^^&#10;  + test_client_nx4ny669@test.com&#10;  ? ^^^^&quot;">backend/tests/test_cargolink_api.py:37: in client_user
+    assert data["email"] == payload["email"]
+E   AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'
+E     
+E     - TEST_client_nx4ny669@test.com
+E     ? ^^^^
+E     + test_client_nx4ny669@test.com
+E     ? ^^^^</error></testcase><testcase classname="tests.test_cargolink_api.TestScanner" name="test_scan_update_status" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'&#10;  &#10;  - TEST_client_nx4ny669@test.com&#10;  ? ^^^^&#10;  + test_client_nx4ny669@test.com&#10;  ? ^^^^&quot;">backend/tests/test_cargolink_api.py:37: in client_user
+    assert data["email"] == payload["email"]
+E   AssertionError: assert 'test_client_...y669@test.com' == 'TEST_client_...y669@test.com'
+E     
+E     - TEST_client_nx4ny669@test.com
+E     ? ^^^^
+E     + test_client_nx4ny669@test.com
+E     ? ^^^^</error></testcase><testcase classname="tests.test_cargolink_api.TestScanner" name="test_scan_lookup_unknown" time="0.080" /><testcase classname="tests.test_cargolink_api.TestAuth" name="test_login_invalid" time="0.338" /><testcase classname="tests.test_cargolink_api.TestEstimate" name="test_estimate_public" time="0.285" /><testcase classname="tests.test_cargolink_api.TestAuth" name="test_me_unauthenticated" time="0.090" /></testsuite></testsuites>

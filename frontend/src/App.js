@@ -1,55 +1,51 @@
-import { useEffect } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
-import { HOME } from "@/constants/testIds";
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
-
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
-
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
-
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          data-testid={HOME.emergentLink}
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
+import { Toaster } from "sonner";
+import { AuthProvider } from "./context/AuthContext";
+import { I18nProvider } from "./i18n";
+import Navbar from "./components/Navbar";
+import ProtectedRoute from "./components/ProtectedRoute";
+import Landing from "./pages/Landing";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import ClientDashboard from "./pages/ClientDashboard";
+import NewShipment from "./pages/NewShipment";
+import Estimate from "./pages/Estimate";
+import TrackShipment from "./pages/TrackShipment";
+import ShipmentDetail from "./pages/ShipmentDetail";
+import BackofficeDashboard from "./pages/BackofficeDashboard";
+import ShipmentsList from "./pages/ShipmentsList";
+import ClientsList from "./pages/ClientsList";
+import Scanner from "./pages/Scanner";
 
 function App() {
   return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </div>
+    <I18nProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Toaster position="top-center" richColors />
+          <div className="min-h-screen flex flex-col">
+            <Navbar />
+            <main className="flex-1">
+              <Routes>
+                <Route path="/" element={<Landing />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/track" element={<TrackShipment />} />
+                <Route path="/estimate" element={<Estimate />} />
+                <Route path="/app" element={<ProtectedRoute><ClientDashboard /></ProtectedRoute>} />
+                <Route path="/app/new" element={<ProtectedRoute><NewShipment /></ProtectedRoute>} />
+                <Route path="/shipment/:id" element={<ProtectedRoute><ShipmentDetail /></ProtectedRoute>} />
+                <Route path="/back-office" element={<ProtectedRoute staffOnly><BackofficeDashboard /></ProtectedRoute>} />
+                <Route path="/back-office/shipments" element={<ProtectedRoute staffOnly><ShipmentsList /></ProtectedRoute>} />
+                <Route path="/back-office/clients" element={<ProtectedRoute staffOnly><ClientsList /></ProtectedRoute>} />
+                <Route path="/scanner" element={<ProtectedRoute staffOnly><Scanner /></ProtectedRoute>} />
+              </Routes>
+            </main>
+          </div>
+        </BrowserRouter>
+      </AuthProvider>
+    </I18nProvider>
   );
 }
 

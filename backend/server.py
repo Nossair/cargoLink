@@ -1,89 +1,459 @@
-from fastapi import FastAPI, APIRouter
 from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
-import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
-import uuid
-from datetime import datetime, timezone
-
-
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
+import os
+import io
+import base64
+import secrets
+import logging
+import random
+import string
+from datetime import datetime, timezone, timedelta
+from typing import List, Optional, Annotated
+
+import jwt
+import bcrypt
+import qrcode
+from bson import ObjectId
+from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends
+from starlette.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel, Field, EmailStr, BeforeValidator, ConfigDict
+
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
-app = FastAPI()
+JWT_ALGORITHM = "HS256"
+EUR_TO_MAD = 10.8
 
-# Create a router with the /api prefix
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
+# ---------------- Models ----------------
+PyObjectId = Annotated[str, BeforeValidator(str)]
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+STATUS_FLOW = [
+    "demande_creee",
+    "en_attente_collecte",
+    "recu_agence",
+    "en_transit",
+    "en_douane",
+    "livre",
+]
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
 
-# Add your routes to the router instead of directly to app
-@api_router.get("/")
-async def root():
-    return {"message": "Hello World"}
+class RegisterInput(BaseModel):
+    first_name: str
+    last_name: str
+    email: EmailStr
+    phone: str
+    address: str
+    password: str
+    role: str = "client"
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
+class LoginInput(BaseModel):
+    email: EmailStr
+    password: str
 
-# Include the router in the main app
+
+class Recipient(BaseModel):
+    first_name: str
+    last_name: str
+    address: str
+    country: str
+    phone: str
+
+
+class Parcel(BaseModel):
+    type: str
+    weight: float
+    length: float = 0
+    width: float = 0
+    height: float = 0
+    declared_value: float = 0
+    category: str = "autre"
+
+
+class ShipmentInput(BaseModel):
+    recipient: Recipient
+    parcel: Parcel
+    origin_country: str
+    pickup_mode: str  # "agency" or "home"
+    pickup_slot: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class StatusUpdateInput(BaseModel):
+    status: str
+    note: Optional[str] = None
+
+
+class EstimateInput(BaseModel):
+    weight: float
+    origin_country: str
+    destination_country: str
+    category: str = "autre"
+    declared_value: float = 0
+
+
+# ---------------- Auth helpers ----------------
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+
+
+def get_jwt_secret() -> str:
+    return os.environ["JWT_SECRET"]
+
+
+def create_access_token(user_id: str, email: str) -> str:
+    payload = {"sub": user_id, "email": email,
+               "exp": datetime.now(timezone.utc) + timedelta(hours=12), "type": "access"}
+    return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
+
+
+def create_refresh_token(user_id: str) -> str:
+    payload = {"sub": user_id, "exp": datetime.now(timezone.utc) + timedelta(days=7), "type": "refresh"}
+    return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
+
+
+def set_auth_cookies(response: Response, access: str, refresh: str):
+    response.set_cookie("access_token", access, httponly=True, secure=True,
+                        samesite="none", max_age=43200, path="/")
+    response.set_cookie("refresh_token", refresh, httponly=True, secure=True,
+                        samesite="none", max_age=604800, path="/")
+
+
+def serialize_user(doc: dict) -> dict:
+    doc = dict(doc)
+    doc["id"] = str(doc["_id"])
+    doc.pop("_id", None)
+    doc.pop("password_hash", None)
+    return doc
+
+
+async def get_current_user(request: Request) -> dict:
+    token = request.cookies.get("access_token")
+    if not token:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth[7:]
+    if not token:
+        raise HTTPException(status_code=401, detail="Non authentifié")
+    try:
+        payload = jwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
+        if payload.get("type") != "access":
+            raise HTTPException(status_code=401, detail="Token invalide")
+        user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
+        if not user:
+            raise HTTPException(status_code=401, detail="Utilisateur introuvable")
+        return user
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Session expirée")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token invalide")
+
+
+def require_staff(user: dict):
+    if user.get("role") not in ("agent", "chef_agence", "admin"):
+        raise HTTPException(status_code=403, detail="Accès réservé au personnel")
+
+
+# ---------------- Business helpers ----------------
+def gen_tracking() -> str:
+    return "CL" + "".join(random.choices(string.digits, k=10))
+
+
+def make_qr_data_url(content: str) -> str:
+    qr = qrcode.QRCode(box_size=8, border=2)
+    qr.add_data(content)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#002FA7", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def compute_estimate(weight: float, origin: str, dest: str, category: str, declared_value: float) -> dict:
+    base_per_kg = 5.0 if origin.upper().startswith("MA") else 4.5
+    handling = 10.0
+    cat_factor = {"habillement": 1.0, "electronique": 1.3, "alimentaire": 1.1, "autre": 1.15}.get(category, 1.15)
+    shipping = (base_per_kg * max(weight, 0.5) + handling) * cat_factor
+    customs_pct = {"habillement": (0.05, 0.12), "electronique": (0.10, 0.20),
+                   "alimentaire": (0.0, 0.05), "autre": (0.08, 0.15)}.get(category, (0.08, 0.15))
+    customs_low = declared_value * customs_pct[0]
+    customs_high = declared_value * customs_pct[1]
+    return {
+        "shipping_eur": round(shipping, 2),
+        "shipping_mad": round(shipping * EUR_TO_MAD, 2),
+        "customs_low_eur": round(customs_low, 2),
+        "customs_high_eur": round(customs_high, 2),
+        "customs_low_mad": round(customs_low * EUR_TO_MAD, 2),
+        "customs_high_mad": round(customs_high * EUR_TO_MAD, 2),
+        "total_low_eur": round(shipping + customs_low, 2),
+        "total_high_eur": round(shipping + customs_high, 2),
+        "eur_to_mad": EUR_TO_MAD,
+    }
+
+
+# ---------------- Auth routes ----------------
+@api_router.post("/auth/register")
+async def register(data: RegisterInput, response: Response):
+    email = data.email.lower()
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
+    role = data.role if data.role in ("client",) else "client"
+    doc = {
+        "email": email, "password_hash": hash_password(data.password),
+        "first_name": data.first_name, "last_name": data.last_name,
+        "phone": data.phone, "address": data.address, "role": role,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    res = await db.users.insert_one(doc)
+    uid = str(res.inserted_id)
+    set_auth_cookies(response, create_access_token(uid, email), create_refresh_token(uid))
+    doc["_id"] = res.inserted_id
+    return serialize_user(doc)
+
+
+@api_router.post("/auth/login")
+async def login(data: LoginInput, response: Response):
+    email = data.email.lower()
+    user = await db.users.find_one({"email": email})
+    if not user or not verify_password(data.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+    uid = str(user["_id"])
+    set_auth_cookies(response, create_access_token(uid, email), create_refresh_token(uid))
+    return serialize_user(user)
+
+
+@api_router.post("/auth/logout")
+async def logout(response: Response):
+    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("refresh_token", path="/")
+    return {"ok": True}
+
+
+@api_router.get("/auth/me")
+async def me(user: dict = Depends(get_current_user)):
+    return serialize_user(user)
+
+
+@api_router.put("/auth/profile")
+async def update_profile(data: dict, user: dict = Depends(get_current_user)):
+    allowed = {k: data[k] for k in ("first_name", "last_name", "phone", "address") if k in data}
+    await db.users.update_one({"_id": user["_id"]}, {"$set": allowed})
+    updated = await db.users.find_one({"_id": user["_id"]})
+    return serialize_user(updated)
+
+
+# ---------------- Estimate ----------------
+@api_router.post("/estimate")
+async def estimate(data: EstimateInput):
+    return compute_estimate(data.weight, data.origin_country, data.destination_country,
+                            data.category, data.declared_value)
+
+
+# ---------------- Shipments ----------------
+def serialize_shipment(doc: dict) -> dict:
+    doc = dict(doc)
+    doc["id"] = str(doc["_id"])
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.post("/shipments")
+async def create_shipment(data: ShipmentInput, user: dict = Depends(get_current_user)):
+    tracking = gen_tracking()
+    est = compute_estimate(data.parcel.weight, data.origin_country,
+                           data.recipient.country, data.parcel.category, data.parcel.declared_value)
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "tracking_number": tracking,
+        "qr_code": make_qr_data_url(tracking),
+        "client_id": str(user["_id"]),
+        "sender": {
+            "first_name": user["first_name"], "last_name": user["last_name"],
+            "phone": user["phone"], "address": user["address"], "email": user["email"],
+        },
+        "recipient": data.recipient.model_dump(),
+        "parcel": data.parcel.model_dump(),
+        "origin_country": data.origin_country,
+        "pickup_mode": data.pickup_mode,
+        "pickup_slot": data.pickup_slot,
+        "notes": data.notes,
+        "estimate": est,
+        "status": "demande_creee",
+        "history": [{"status": "demande_creee", "note": "Demande créée", "at": now}],
+        "created_at": now,
+    }
+    res = await db.shipments.insert_one(doc)
+    doc["_id"] = res.inserted_id
+    return serialize_shipment(doc)
+
+
+@api_router.get("/shipments")
+async def list_shipments(user: dict = Depends(get_current_user)):
+    if user.get("role") in ("agent", "chef_agence", "admin"):
+        cursor = db.shipments.find().sort("created_at", -1)
+    else:
+        cursor = db.shipments.find({"client_id": str(user["_id"])}).sort("created_at", -1)
+    docs = await cursor.to_list(1000)
+    return [serialize_shipment(d) for d in docs]
+
+
+@api_router.get("/shipments/track/{tracking_number}")
+async def track(tracking_number: str):
+    doc = await db.shipments.find_one({"tracking_number": tracking_number})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Colis introuvable")
+    return serialize_shipment(doc)
+
+
+@api_router.get("/shipments/{shipment_id}")
+async def get_shipment(shipment_id: str, user: dict = Depends(get_current_user)):
+    doc = await db.shipments.find_one({"_id": ObjectId(shipment_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Colis introuvable")
+    if user.get("role") == "client" and doc["client_id"] != str(user["_id"]):
+        raise HTTPException(status_code=403, detail="Accès refusé")
+    return serialize_shipment(doc)
+
+
+@api_router.put("/shipments/{shipment_id}/status")
+async def update_status(shipment_id: str, data: StatusUpdateInput, user: dict = Depends(get_current_user)):
+    require_staff(user)
+    if data.status not in STATUS_FLOW:
+        raise HTTPException(status_code=400, detail="Statut invalide")
+    doc = await db.shipments.find_one({"_id": ObjectId(shipment_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Colis introuvable")
+    entry = {"status": data.status, "note": data.note or "", "at": datetime.now(timezone.utc).isoformat(),
+             "by": f"{user['first_name']} {user['last_name']}"}
+    await db.shipments.update_one({"_id": ObjectId(shipment_id)},
+                                  {"$set": {"status": data.status}, "$push": {"history": entry}})
+    updated = await db.shipments.find_one({"_id": ObjectId(shipment_id)})
+    return serialize_shipment(updated)
+
+
+# Scanner: update by tracking number (staff)
+@api_router.put("/scan/{tracking_number}/status")
+async def scan_update(tracking_number: str, data: StatusUpdateInput, user: dict = Depends(get_current_user)):
+    require_staff(user)
+    doc = await db.shipments.find_one({"tracking_number": tracking_number})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Colis introuvable")
+    if data.status not in STATUS_FLOW:
+        raise HTTPException(status_code=400, detail="Statut invalide")
+    entry = {"status": data.status, "note": data.note or "", "at": datetime.now(timezone.utc).isoformat(),
+             "by": f"{user['first_name']} {user['last_name']}"}
+    await db.shipments.update_one({"_id": doc["_id"]},
+                                  {"$set": {"status": data.status}, "$push": {"history": entry}})
+    updated = await db.shipments.find_one({"_id": doc["_id"]})
+    return serialize_shipment(updated)
+
+
+@api_router.get("/scan/{tracking_number}")
+async def scan_lookup(tracking_number: str, user: dict = Depends(get_current_user)):
+    require_staff(user)
+    doc = await db.shipments.find_one({"tracking_number": tracking_number})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Colis introuvable")
+    return serialize_shipment(doc)
+
+
+# ---------------- Clients / dashboard (staff) ----------------
+@api_router.get("/clients")
+async def list_clients(user: dict = Depends(get_current_user)):
+    require_staff(user)
+    docs = await db.users.find({"role": "client"}).sort("created_at", -1).to_list(1000)
+    result = []
+    for d in docs:
+        s = serialize_user(d)
+        s["shipment_count"] = await db.shipments.count_documents({"client_id": s["id"]})
+        result.append(s)
+    return result
+
+
+@api_router.get("/clients/{client_id}")
+async def client_detail(client_id: str, user: dict = Depends(get_current_user)):
+    require_staff(user)
+    c = await db.users.find_one({"_id": ObjectId(client_id)})
+    if not c:
+        raise HTTPException(status_code=404, detail="Client introuvable")
+    shipments = await db.shipments.find({"client_id": client_id}).sort("created_at", -1).to_list(1000)
+    return {"client": serialize_user(c), "shipments": [serialize_shipment(s) for s in shipments]}
+
+
+@api_router.get("/dashboard/stats")
+async def dashboard_stats(user: dict = Depends(get_current_user)):
+    require_staff(user)
+    total = await db.shipments.count_documents({})
+    delivered = await db.shipments.count_documents({"status": "livre"})
+    pending = await db.shipments.count_documents({"status": {"$in": ["demande_creee", "en_attente_collecte"]}})
+    in_transit = await db.shipments.count_documents({"status": {"$in": ["en_transit", "en_douane", "recu_agence"]}})
+    clients = await db.users.count_documents({"role": "client"})
+    # alerts: shipments stuck (not delivered) older than 7 days
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    alerts_cursor = db.shipments.find({"status": {"$ne": "livre"}, "created_at": {"$lt": cutoff}}).limit(20)
+    alerts = [serialize_shipment(d) for d in await alerts_cursor.to_list(20)]
+    by_status = {}
+    for s in STATUS_FLOW:
+        by_status[s] = await db.shipments.count_documents({"status": s})
+    return {"total": total, "delivered": delivered, "pending": pending, "in_transit": in_transit,
+            "clients": clients, "by_status": by_status, "alerts": alerts}
+
+
 app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=["*"],
+    allow_origin_regex=".*",
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+
+@app.on_event("startup")
+async def startup():
+    await db.users.create_index("email", unique=True)
+    await db.shipments.create_index("tracking_number", unique=True)
+    # seed admin + an agent
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@cargolink.ma")
+    admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
+    existing = await db.users.find_one({"email": admin_email})
+    if not existing:
+        await db.users.insert_one({
+            "email": admin_email, "password_hash": hash_password(admin_password),
+            "first_name": "Admin", "last_name": "CargoLink", "phone": "+212600000000",
+            "address": "Casablanca, Maroc", "role": "admin",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    elif not verify_password(admin_password, existing["password_hash"]):
+        await db.users.update_one({"email": admin_email},
+                                  {"$set": {"password_hash": hash_password(admin_password)}})
+    agent_email = "agent@cargolink.ma"
+    if not await db.users.find_one({"email": agent_email}):
+        await db.users.insert_one({
+            "email": agent_email, "password_hash": hash_password("agent123"),
+            "first_name": "Youssef", "last_name": "Bennani", "phone": "+212611111111",
+            "address": "Agence Casablanca", "role": "agent",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
 
 @app.on_event("shutdown")
-async def shutdown_db_client():
+async def shutdown():
     client.close()
