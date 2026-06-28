@@ -21,6 +21,7 @@ export default function Navbar() {
         { to: "/app/new", label: t("nav_new_shipment"), testid: "nav-new-shipment" },
         { to: "/track", label: t("nav_track"), testid: "nav-track" },
         { to: "/estimate", label: t("nav_estimate"), testid: "nav-estimate" },
+        { to: "/profile", label: t("nav_profile"), testid: "nav-profile" },
       ]
     : isStaff(user)
     ? [
@@ -31,6 +32,7 @@ export default function Navbar() {
         { to: "/estimate", label: t("nav_estimate"), testid: "nav-bo-estimate" },
         ...(isAdmin(user) ? [{ to: "/back-office/agencies", label: t("nav_agencies"), testid: "nav-bo-agencies" }] : []),
         { to: "/scanner", label: t("nav_scanner"), testid: "nav-bo-scanner" },
+        { to: "/profile", label: t("nav_profile"), testid: "nav-profile" },
       ]
     : [];
 
