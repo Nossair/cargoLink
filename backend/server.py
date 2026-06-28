@@ -11,7 +11,7 @@ import logging
 import random
 import string
 from datetime import datetime, timezone, timedelta
-from typing import List, Optional, Annotated
+from typing import List, Optional, Annotated, Literal
 
 import jwt
 import bcrypt
@@ -84,7 +84,7 @@ class Parcel(BaseModel):
     width: float = 0
     height: float = 0
     declared_value: float = 0
-    category: str = "autre"
+    category: Literal["habillement", "electronique", "alimentaire", "autre"] = "autre"
 
 
 class NewClientInput(BaseModel):
@@ -99,7 +99,7 @@ class ShipmentInput(BaseModel):
     recipient: Recipient
     parcel: Parcel
     origin_country: str
-    pickup_mode: str  # "agency" or "home"
+    pickup_mode: Literal["agency", "home"]
     pickup_slot: Optional[str] = None
     notes: Optional[str] = None
     # staff-only: create for an existing or new client
@@ -112,7 +112,7 @@ class ShipmentEditInput(BaseModel):
     recipient: Recipient
     parcel: Parcel
     origin_country: str
-    pickup_mode: str
+    pickup_mode: Literal["agency", "home"]
     pickup_slot: Optional[str] = None
     notes: Optional[str] = None
 
@@ -229,6 +229,32 @@ def require_admin(user: dict):
 def gen_password(length: int = 10) -> str:
     alphabet = string.ascii_letters + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+# ---------------- Brute-force protection (login) ----------------
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_LOCKOUT_MINUTES = 15
+_login_attempts: dict = {}  # email -> {"count": int, "locked_until": datetime|None}
+
+
+def check_login_lockout(email: str):
+    rec = _login_attempts.get(email)
+    if rec and rec.get("locked_until") and rec["locked_until"] > datetime.now(timezone.utc):
+        remaining = int((rec["locked_until"] - datetime.now(timezone.utc)).total_seconds() // 60) + 1
+        raise HTTPException(status_code=429,
+                            detail=f"Trop de tentatives. Réessayez dans {remaining} minute(s).")
+
+
+def record_login_failure(email: str):
+    rec = _login_attempts.setdefault(email, {"count": 0, "locked_until": None})
+    rec["count"] += 1
+    if rec["count"] >= LOGIN_MAX_ATTEMPTS:
+        rec["locked_until"] = datetime.now(timezone.utc) + timedelta(minutes=LOGIN_LOCKOUT_MINUTES)
+        rec["count"] = 0
+
+
+def clear_login_failures(email: str):
+    _login_attempts.pop(email, None)
 
 
 # ---------------- Business helpers ----------------
@@ -400,11 +426,35 @@ async def register(data: RegisterInput, response: Response):
 @api_router.post("/auth/login")
 async def login(data: LoginInput, response: Response):
     email = data.email.lower()
+    check_login_lockout(email)
     user = await db.users.find_one({"email": email})
     if not user or not user.get("password_hash") or not verify_password(data.password, user["password_hash"]):
+        record_login_failure(email)
         raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+    clear_login_failures(email)
     uid = str(user["_id"])
     set_auth_cookies(response, create_access_token(uid, email), create_refresh_token(uid))
+    return serialize_user(user)
+
+
+@api_router.post("/auth/refresh")
+async def refresh(request: Request, response: Response):
+    token = request.cookies.get("refresh_token")
+    if not token:
+        raise HTTPException(status_code=401, detail="Non authentifié")
+    try:
+        payload = jwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Token invalide")
+        user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
+        if not user:
+            raise HTTPException(status_code=401, detail="Utilisateur introuvable")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Session expirée")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token invalide")
+    uid = str(user["_id"])
+    set_auth_cookies(response, create_access_token(uid, user["email"]), create_refresh_token(uid))
     return serialize_user(user)
 
 
@@ -560,12 +610,13 @@ async def cancel_shipment(shipment_id: str, user: dict = Depends(get_current_use
 
 
 @api_router.get("/shipments")
-async def list_shipments(user: dict = Depends(get_current_user)):
-    if user.get("role") in STAFF_ROLES:
-        cursor = db.shipments.find().sort("created_at", -1)
-    else:
-        cursor = db.shipments.find({"client_id": str(user["_id"])}).sort("created_at", -1)
-    docs = await cursor.to_list(1000)
+async def list_shipments(user: dict = Depends(get_current_user),
+                         skip: int = 0, limit: int = 1000):
+    skip = max(skip, 0)
+    limit = min(max(limit, 1), 1000)
+    query = {} if user.get("role") in STAFF_ROLES else {"client_id": str(user["_id"])}
+    cursor = db.shipments.find(query).sort("created_at", -1).skip(skip).limit(limit)
+    docs = await cursor.to_list(limit)
     return [serialize_shipment(d) for d in docs]
 
 
@@ -644,9 +695,12 @@ async def scan_lookup(tracking_number: str, user: dict = Depends(get_current_use
 
 # ---------------- Clients / dashboard (staff) ----------------
 @api_router.get("/clients")
-async def list_clients(user: dict = Depends(get_current_user)):
+async def list_clients(user: dict = Depends(get_current_user),
+                       skip: int = 0, limit: int = 1000):
     require_staff(user)
-    docs = await db.users.find({"role": "client"}).sort("created_at", -1).to_list(1000)
+    skip = max(skip, 0)
+    limit = min(max(limit, 1), 1000)
+    docs = await db.users.find({"role": "client"}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
     result = []
     for d in docs:
         s = serialize_user(d)

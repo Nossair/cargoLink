@@ -28,8 +28,15 @@ Plateforme MVP de gestion d'envois de colis entre l'Europe et le Maroc, réuniss
 ## Comptes de test
 - admin@cargolink.ma / admin123 ; agent@cargolink.ma / agent123 ; client à créer via /register.
 
+## Implémenté (2026-06-28 — finalisation v1)
+- P1: endpoint `/api/auth/refresh` (consomme le cookie refresh, renouvelle access+refresh) + auto-refresh frontend (intercepteur axios qui rejoue la requête sur 401).
+- P1: brute-force lockout login (5 tentatives → blocage 15 min, HTTP 429). Compteur en mémoire (`_login_attempts`), réinitialisé au redémarrage.
+- P1: validation `Literal` sur `pickup_mode` (agency|home) et `category` (habillement|electronique|alimentaire|autre).
+- P1: pagination optionnelle rétro-compatible (`skip`/`limit`) sur GET /shipments et /clients.
+- P2: UI édition de profil (`/profile`, page Profile.js + lien Navbar + `updateProfile` AuthContext), consomme PUT /auth/profile.
+
 ## Backlog / Next
-- P1: endpoint /api/auth/refresh (cookie refresh non exploité, session expire à 12h), brute-force lockout login.
-- P1: validation Literal pickup_mode, pagination listes.
-- P2: temps réel WebSocket (actuellement polling au chargement), email de confirmation (volontairement hors scope MVP), filtres date/destination supplémentaires Back Office.
-- P2: gestion de profil client (édition) côté UI (endpoint /auth/profile déjà prêt).
+- P2: temps réel WebSocket (actuellement polling) — reporté, le polling suffit pour la v1.
+- P2: email de confirmation (volontairement hors scope MVP).
+- P2: filtres date/destination supplémentaires Back Office (filtrage statut/recherche déjà côté client).
+- Note infra: lockout en mémoire → migrer vers Redis/Mongo si multi-process en prod. Cookies `secure=true; samesite=none` OK en prod HTTPS et sur localhost (Chrome).

@@ -21,6 +21,7 @@ import Agencies from "./pages/Agencies";
 import AgencyDetailPage from "./pages/AgencyDetailPage";
 import EditShipment from "./pages/EditShipment";
 import Scanner from "./pages/Scanner";
+import Profile from "./pages/Profile";
 
 function App() {
   return (
@@ -38,6 +39,7 @@ function App() {
                 <Route path="/track" element={<TrackShipment />} />
                 <Route path="/estimate" element={<Estimate />} />
                 <Route path="/app" element={<ProtectedRoute><ClientDashboard /></ProtectedRoute>} />
+                <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                 <Route path="/app/new" element={<ProtectedRoute><NewShipment /></ProtectedRoute>} />
                 <Route path="/shipment/:id" element={<ProtectedRoute><ShipmentDetail /></ProtectedRoute>} />
                 <Route path="/shipment/:id/edit" element={<ProtectedRoute><EditShipment /></ProtectedRoute>} />
